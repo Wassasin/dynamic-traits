@@ -6,6 +6,6 @@ This example is split into 4 parts:
 * `bin/main`: an example application that makes use of this all
 
 ## TODO
-[ ] Can we simplify `traits` away?
-[ ] `hal/foreign` is an implementation of the `traits` directly on some peripherals.
-[ ] the original problem statement asks for a abstract/generic way to instantiate the `Platform` struct.
+- [ ] Can we simplify `traits` away?
+- [ ] `hal/foreign` is an implementation of the `traits` directly on some peripherals.
+- [ ] the original problem statement asks for a abstract/generic way to instantiate the `Platform` struct.
