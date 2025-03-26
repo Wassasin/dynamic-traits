@@ -9,12 +9,19 @@ mod sealed {
 
 pub trait Instance: sealed::Instance {}
 
+pub trait TxPin<T: Instance> {}
+pub trait RxPin<T: Instance> {}
+
 pub struct Uart<'a> {
     _lifetime: PhantomData<&'a ()>,
 }
 
 impl<'a> Uart<'a> {
-    pub fn new<T: Instance>(_peri: impl Peripheral<P = T> + 'a) -> Self {
+    pub fn new<T: Instance>(
+        _peri: impl Peripheral<P = T> + 'a,
+        _rx: impl Peripheral<P = impl RxPin<T>>,
+        _tx: impl Peripheral<P = impl TxPin<T>>,
+    ) -> Self {
         Self {
             _lifetime: PhantomData,
         }
@@ -39,3 +46,6 @@ impl embedded_io_async::Write for Uart<'_> {
 
 impl sealed::Instance for crate::hal::peripherals::UART0 {}
 impl Instance for crate::hal::peripherals::UART0 {}
+
+impl RxPin<crate::hal::peripherals::UART0> for crate::hal::peripherals::PIN_A {}
+impl TxPin<crate::hal::peripherals::UART0> for crate::hal::peripherals::PIN_B {}

@@ -1,8 +1,8 @@
 use embassy_hal_internal::Peripheral;
 
-use crate::traits::{AsOutput, OwnedRef};
+use crate::traits::{AsInput, AsOutput};
 
-use super::gpio::{self, Output};
+use super::gpio::{self, Input, Output};
 
 impl<T: Peripheral<P = impl gpio::Instance>> AsOutput for T {
     type Target<'a>
@@ -10,7 +10,18 @@ impl<T: Peripheral<P = impl gpio::Instance>> AsOutput for T {
     where
         T: 'a;
 
-    fn as_output<'a>(&'a mut self) -> crate::traits::OwnedRef<'a, Self::Target<'a>> {
-        OwnedRef::new(Output::new(self))
+    fn as_output<'a>(&'a mut self) -> Self::Target<'a> {
+        Output::new(self)
+    }
+}
+
+impl<T: Peripheral<P = impl gpio::Instance>> AsInput for T {
+    type Target<'a>
+        = Input<'a>
+    where
+        T: 'a;
+
+    fn as_input<'a>(&'a mut self) -> Self::Target<'a> {
+        Input::new(self)
     }
 }

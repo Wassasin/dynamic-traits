@@ -2,19 +2,19 @@
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_io_async::{Read, Write};
 
-use crate::traits::{AsInput, AsIoReadWriteDevice, AsOutput, OwnedRef};
+use crate::traits::{AsInput, AsIoReadWriteDevice, AsOutput};
 
 /// Specific arrangement of pins as expected by this crate.
-pub struct Pins<'a, RX, TX> {
-    pub rx: OwnedRef<'a, RX>,
-    pub tx: OwnedRef<'a, TX>,
+pub struct Pins<RX, TX> {
+    pub rx: RX,
+    pub tx: TX,
 }
 
 pub trait AsPins {
     type RX: AsOutput + AsInput;
     type TX: AsOutput + AsInput;
 
-    fn as_pins<'a>(&'a mut self) -> Pins<'a, Self::RX, Self::TX>;
+    fn as_pins<'a>(&'a mut self) -> &'a mut Pins<Self::RX, Self::TX>;
 }
 
 /// BSP crates should implement this trait if they want to use this library.
@@ -43,11 +43,11 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
     loop {
         match state {
             FeatureState::PowerOn => {
-                let mut pins = dependencies.as_pins();
+                let pins = dependencies.as_pins();
 
                 // Weird chip on the other side needs the bus "de-gaussed"
                 let mut rx_pin = pins.rx.as_output();
-                let mut tx_pin: OwnedRef<'_, _> = pins.tx.as_output();
+                let mut tx_pin = pins.tx.as_output();
 
                 rx_pin.set_high().unwrap();
                 tx_pin.set_high().unwrap();
@@ -72,7 +72,7 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
                 }
             }
             FeatureState::BitBanging => {
-                let mut pins = dependencies.as_pins();
+                let pins = dependencies.as_pins();
 
                 let mut rx_pin = pins.rx.as_input();
                 let mut tx_pin = pins.tx.as_output();
