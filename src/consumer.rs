@@ -14,7 +14,7 @@ pub trait AsPins {
     type RX: AsOutput + AsInput;
     type TX: AsOutput + AsInput;
 
-    fn as_pins<'a>(&'a mut self) -> &'a mut Pins<Self::RX, Self::TX>;
+    fn as_pins(&mut self) -> &mut Pins<Self::RX, Self::TX>;
 }
 
 /// BSP crates should implement this trait if they want to use this library.

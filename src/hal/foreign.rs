@@ -10,7 +10,7 @@ impl<T: Peripheral<P = impl gpio::Instance>> AsOutput for T {
     where
         T: 'a;
 
-    fn as_output<'a>(&'a mut self) -> Self::Target<'a> {
+    fn as_output(&mut self) -> Self::Target<'_> {
         Output::new(self)
     }
 }
@@ -21,7 +21,7 @@ impl<T: Peripheral<P = impl gpio::Instance>> AsInput for T {
     where
         T: 'a;
 
-    fn as_input<'a>(&'a mut self) -> Self::Target<'a> {
+    fn as_input(&mut self) -> Self::Target<'_> {
         Input::new(self)
     }
 }

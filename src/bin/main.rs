@@ -30,7 +30,7 @@ impl AsIoReadWriteDevice for PlatformManager<'_> {
     where
         Self: 'a;
 
-    fn as_io_read_write<'a>(&'a mut self) -> Self::Target<'a> {
+    fn as_io_read_write(&mut self) -> Self::Target<'_> {
         Uart::new(&mut self.uart, &mut self.pins.rx, &mut self.pins.tx)
     }
 }
@@ -43,8 +43,7 @@ fn main() {
         let mut output = Output::new(&mut p.PIN_A);
         output.set_high().unwrap();
 
-        let input = Input::new(&mut p.PIN_A);
-        drop(input);
+        let _input = Input::new(&mut p.PIN_A);
     }
 
     let platform = PlatformManager {
