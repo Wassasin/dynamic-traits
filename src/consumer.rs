@@ -10,14 +10,15 @@ pub struct Pins<'a, RX, TX> {
     pub tx: OwnedRef<'a, TX>,
 }
 
-pub trait AsPins<'a> {
-    fn as_pins(
-        &'a mut self,
-    ) -> Pins<'a, impl AsOutput<'a> + AsInput + 'a, impl AsOutput + AsInput + 'a>;
+pub trait AsPins {
+    type RX: AsOutput + AsInput;
+    type TX: AsOutput + AsInput;
+
+    fn as_pins<'a>(&'a mut self) -> Pins<'a, Self::RX, Self::TX>;
 }
 
 /// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency<'a>: AsIoReadWriteDevice<'a> + AsPins<'a> + 'a {}
+pub trait Dependency: AsIoReadWriteDevice + AsPins {}
 
 enum FeatureState {
     PowerOn,
@@ -34,7 +35,7 @@ async fn precise_wait_us(_time_us: u64) {}
 async fn wait_for_something() {}
 
 /// Core logic implemented by this crate.
-pub async fn run(mut dependencies: impl Dependency<'_>) -> ! {
+pub async fn run(mut dependencies: impl Dependency) -> ! {
     const MAGIC_SEQUENCE_TO_STARTUP: [u8; 4] = [0x01, 0x02, 0x03, 0xff];
 
     let mut state = FeatureState::PowerOn;

@@ -39,37 +39,51 @@ impl<'a, T> DerefMut for OwnedRef<'a, T> {
     }
 }
 
-pub trait AsInput<'a> {
-    type Target: InputPin + 'a;
-    fn as_input(&'a mut self) -> OwnedRef<'a, Self::Target>;
+pub trait AsInput {
+    type Target<'a>: InputPin + 'a
+    where
+        Self: 'a;
+    fn as_input<'a>(&'a mut self) -> OwnedRef<'a, Self::Target<'a>>;
 }
 
-pub trait AsOutput<'a> {
-    type Target: OutputPin + 'a;
-    fn as_output(&'a mut self) -> OwnedRef<'a, Self::Target>;
+pub trait AsOutput {
+    type Target<'a>: OutputPin + 'a
+    where
+        Self: 'a;
+    fn as_output<'a>(&'a mut self) -> OwnedRef<'a, Self::Target<'a>>;
 }
 
-pub trait AsFlex<'a> {
-    type Target: InputPin + OutputPin + 'a;
-    fn as_flex(&'a mut self) -> OwnedRef<'a, Self::Target>;
+pub trait AsFlex {
+    type Target<'a>: InputPin + OutputPin + 'a
+    where
+        Self: 'a;
+    fn as_flex<'a>(&'a mut self) -> OwnedRef<'a, Self::Target<'a>>;
 }
 
-pub trait AsI2cDevice<'a> {
-    type Target: I2c + 'a;
-    fn as_i2c(&'a mut self) -> OwnedRef<'a, Self::Target>;
+pub trait AsI2cDevice {
+    type Target<'a>: I2c + 'a
+    where
+        Self: 'a;
+    fn as_i2c<'a>(&'a mut self) -> OwnedRef<'a, Self::Target<'a>>;
 }
 
-pub trait AsIoWriteDevice<'a> {
-    type Target: Write + 'a;
-    fn as_io_write(&'a mut self) -> OwnedRef<'a, Self::Target>;
+pub trait AsIoWriteDevice {
+    type Target<'a>: Write + 'a
+    where
+        Self: 'a;
+    fn as_io_write<'a>(&'a mut self) -> OwnedRef<'a, Self::Target<'a>>;
 }
 
-pub trait AsIoReadDevice<'a> {
-    type Target: Read + 'a;
-    fn as_io_read(&'a mut self) -> OwnedRef<'a, Self::Target>;
+pub trait AsIoReadDevice {
+    type Target<'a>: Read + 'a
+    where
+        Self: 'a;
+    fn as_io_read<'a>(&'a mut self) -> OwnedRef<'a, Self::Target<'a>>;
 }
 
-pub trait AsIoReadWriteDevice<'a> {
-    type Target: Read + Write + 'a;
-    fn as_io_read_write(&'a mut self) -> OwnedRef<'a, Self::Target>;
+pub trait AsIoReadWriteDevice {
+    type Target<'a>: Read + Write + 'a
+    where
+        Self: 'a;
+    fn as_io_read_write<'a>(&'a mut self) -> OwnedRef<'a, Self::Target<'a>>;
 }
