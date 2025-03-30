@@ -3,39 +3,48 @@ use dynamic_traits::{
     hal::{
         Peripherals,
         gpio::{Input, Output},
-        peripherals::{PIN_A, PIN_B, UART0},
         uart::Uart,
     },
     traits::AsIoReadWriteDevice,
 };
 use embedded_hal::digital::OutputPin;
 
-struct PlatformManager<'a> {
-    pins: consumer::Pins<&'a mut PIN_A, &'a mut PIN_B>,
-    uart: &'a mut UART0,
+macro_rules! impl_board {
+    ($board:ident, $pin_rx:ident, $pin_tx:ident, $uart:ident) => {
+        struct $board<'a> {
+            pins: consumer::Pins<
+                &'a mut dynamic_traits::hal::peripherals::$pin_rx,
+                &'a mut dynamic_traits::hal::peripherals::$pin_tx,
+            >,
+            uart: &'a mut dynamic_traits::hal::peripherals::$uart,
+        }
+
+        impl<'a> AsPins for $board<'a> {
+            type RX = &'a mut dynamic_traits::hal::peripherals::$pin_rx;
+            type TX = &'a mut dynamic_traits::hal::peripherals::$pin_tx;
+
+            fn as_pins<'b>(&'b mut self) -> &'b mut consumer::Pins<Self::RX, Self::TX> {
+                &mut self.pins
+            }
+        }
+
+        impl AsIoReadWriteDevice for $board<'_> {
+            type Target<'a>
+                = Uart<'a>
+            where
+                Self: 'a;
+
+            fn as_io_read_write(&mut self) -> Self::Target<'_> {
+                Uart::new(&mut self.uart, &mut self.pins.rx, &mut self.pins.tx)
+            }
+        }
+
+        impl Dependency for $board<'_> {}
+    };
 }
 
-impl<'a> AsPins for PlatformManager<'a> {
-    type RX = &'a mut PIN_A;
-    type TX = &'a mut PIN_B;
-
-    fn as_pins<'b>(&'b mut self) -> &'b mut consumer::Pins<&'a mut PIN_A, &'a mut PIN_B> {
-        &mut self.pins
-    }
-}
-
-impl AsIoReadWriteDevice for PlatformManager<'_> {
-    type Target<'a>
-        = Uart<'a>
-    where
-        Self: 'a;
-
-    fn as_io_read_write(&mut self) -> Self::Target<'_> {
-        Uart::new(&mut self.uart, &mut self.pins.rx, &mut self.pins.tx)
-    }
-}
-
-impl Dependency for PlatformManager<'_> {}
+impl_board!(BoardA, PIN_A, PIN_B, UART0);
+impl_board!(BoardB, PIN_C, PIN_D, UART1);
 
 fn main() {
     let mut p = unsafe { Peripherals::steal() };
@@ -46,7 +55,7 @@ fn main() {
         let _input = Input::new(&mut p.PIN_A);
     }
 
-    let platform = PlatformManager {
+    let board = BoardA {
         pins: Pins {
             rx: &mut p.PIN_A,
             tx: &mut p.PIN_B,
@@ -54,6 +63,6 @@ fn main() {
         uart: &mut p.UART0,
     };
 
-    let future = consumer::run(platform);
+    let future = consumer::run(board);
     drop(future);
 }
