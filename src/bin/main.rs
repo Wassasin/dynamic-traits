@@ -53,6 +53,40 @@ enum Boards {
     C,
 }
 
+enum AnyBoard<'a> {
+    A(BoardA<'a>),
+    B(BoardB<'a>),
+    C(BoardC<'a>),
+}
+
+impl<'a> AnyBoard<'a> {
+    pub fn select(p: &'a mut Peripherals, board: Boards) -> Self {
+        match board {
+            Boards::A => AnyBoard::A(BoardA {
+                pins: Pins {
+                    rx: &mut p.PIN_A,
+                    tx: &mut p.PIN_B,
+                },
+                uart: &mut p.UART0,
+            }),
+            Boards::B => AnyBoard::B(BoardB {
+                pins: Pins {
+                    rx: &mut p.PIN_B,
+                    tx: &mut p.PIN_C,
+                },
+                uart: &mut p.UART1,
+            }),
+            Boards::C => AnyBoard::C(BoardC {
+                pins: Pins {
+                    rx: &mut p.PIN_C,
+                    tx: &mut p.PIN_D,
+                },
+                uart: &mut p.UART2,
+            }),
+        }
+    }
+}
+
 fn main() {
     let mut p = unsafe { Peripherals::steal() };
     {
@@ -63,15 +97,19 @@ fn main() {
     }
 
     loop {
-        let board = BoardA {
-            pins: Pins {
-                rx: &mut p.PIN_A,
-                tx: &mut p.PIN_B,
-            },
-            uart: &mut p.UART0,
-        };
+        for board in [Boards::A, Boards::B, Boards::C] {
+            let board = AnyBoard::select(&mut p, board);
 
-        let future = consumer::run(board);
-        drop(future);
+            fn run(board: impl Dependency) {
+                let future = consumer::run(board);
+                drop(future);
+            }
+
+            match board {
+                AnyBoard::A(board) => run(board),
+                AnyBoard::B(board) => run(board),
+                AnyBoard::C(board) => run(board),
+            }
+        }
     }
 }
