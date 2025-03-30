@@ -87,7 +87,14 @@ impl InputPin for Flex<'_> {
     }
 }
 
-impl sealed::Instance for crate::hal::peripherals::PIN_A {}
-impl Instance for crate::hal::peripherals::PIN_A {}
-impl sealed::Instance for crate::hal::peripherals::PIN_B {}
-impl Instance for crate::hal::peripherals::PIN_B {}
+macro_rules! impl_pin {
+    ($pin_periph:ident) => {
+        impl sealed::Instance for crate::hal::peripherals::$pin_periph {}
+        impl Instance for crate::hal::peripherals::$pin_periph {}
+    };
+}
+
+impl_pin!(PIN_A);
+impl_pin!(PIN_B);
+impl_pin!(PIN_C);
+impl_pin!(PIN_D);
