@@ -44,7 +44,14 @@ macro_rules! impl_board {
 }
 
 impl_board!(BoardA, PIN_A, PIN_B, UART0);
-impl_board!(BoardB, PIN_C, PIN_D, UART1);
+impl_board!(BoardB, PIN_B, PIN_C, UART1);
+impl_board!(BoardC, PIN_C, PIN_D, UART2);
+
+enum Boards {
+    A,
+    B,
+    C,
+}
 
 fn main() {
     let mut p = unsafe { Peripherals::steal() };
@@ -55,14 +62,16 @@ fn main() {
         let _input = Input::new(&mut p.PIN_A);
     }
 
-    let board = BoardA {
-        pins: Pins {
-            rx: &mut p.PIN_A,
-            tx: &mut p.PIN_B,
-        },
-        uart: &mut p.UART0,
-    };
+    loop {
+        let board = BoardA {
+            pins: Pins {
+                rx: &mut p.PIN_A,
+                tx: &mut p.PIN_B,
+            },
+            uart: &mut p.UART0,
+        };
 
-    let future = consumer::run(board);
-    drop(future);
+        let future = consumer::run(board);
+        drop(future);
+    }
 }

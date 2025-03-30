@@ -48,8 +48,12 @@ impl sealed::Instance for crate::hal::peripherals::UART0 {}
 impl Instance for crate::hal::peripherals::UART0 {}
 impl sealed::Instance for crate::hal::peripherals::UART1 {}
 impl Instance for crate::hal::peripherals::UART1 {}
+impl sealed::Instance for crate::hal::peripherals::UART2 {}
+impl Instance for crate::hal::peripherals::UART2 {}
 
 impl RxPin<crate::hal::peripherals::UART0> for crate::hal::peripherals::PIN_A {}
 impl TxPin<crate::hal::peripherals::UART0> for crate::hal::peripherals::PIN_B {}
-impl RxPin<crate::hal::peripherals::UART1> for crate::hal::peripherals::PIN_C {}
-impl TxPin<crate::hal::peripherals::UART1> for crate::hal::peripherals::PIN_D {}
+impl RxPin<crate::hal::peripherals::UART1> for crate::hal::peripherals::PIN_B {}
+impl TxPin<crate::hal::peripherals::UART1> for crate::hal::peripherals::PIN_C {}
+impl RxPin<crate::hal::peripherals::UART2> for crate::hal::peripherals::PIN_C {}
+impl TxPin<crate::hal::peripherals::UART2> for crate::hal::peripherals::PIN_D {}
