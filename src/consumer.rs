@@ -1,4 +1,5 @@
 //! A driver library that does not know what hardware it is running on.
+use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_io_async::{Read, Write};
 
@@ -31,8 +32,13 @@ fn parse(_buf: &[u8]) -> Result<(), ()> {
     Ok(())
 }
 
-async fn precise_wait_us(_time_us: u64) {}
-async fn wait_for_something() {}
+async fn precise_wait_us(time_us: u64) {
+    Timer::after_micros(time_us).await
+}
+
+async fn wait_for_something() {
+    embassy_futures::yield_now().await
+}
 
 /// Core logic implemented by this crate.
 pub async fn run(mut dependencies: impl Dependency) -> ! {
