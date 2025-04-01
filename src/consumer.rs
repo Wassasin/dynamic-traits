@@ -12,10 +12,14 @@ pub struct Pins<RX, TX> {
 }
 
 pub trait AsPins {
-    type RX: AsOutput + AsInput;
-    type TX: AsOutput + AsInput;
+    type RX<'a>: AsOutput<'a> + AsInput<'a>
+    where
+        Self: 'a;
+    type TX<'a>: AsOutput<'a> + AsInput<'a>
+    where
+        Self: 'a;
 
-    fn as_pins(&mut self) -> &mut Pins<Self::RX, Self::TX>;
+    fn as_pins<'a, 'b: 'a>(&'a mut self) -> &'a mut Pins<Self::RX<'b>, Self::TX<'b>>;
 }
 
 /// BSP crates should implement this trait if they want to use this library.

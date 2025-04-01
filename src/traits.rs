@@ -6,18 +6,14 @@ use embedded_hal::{
 };
 use embedded_io_async::{Read, Write};
 
-pub trait AsInput {
-    type Target<'a>: InputPin + 'a
-    where
-        Self: 'a;
-    fn as_input(&mut self) -> Self::Target<'_>;
+pub trait AsInput<'a> {
+    type Target: InputPin + 'a;
+    fn as_input(&'a mut self) -> Self::Target;
 }
 
-pub trait AsOutput {
-    type Target<'a>: OutputPin + 'a
-    where
-        Self: 'a;
-    fn as_output(&mut self) -> Self::Target<'_>;
+pub trait AsOutput<'a> {
+    type Target: OutputPin + 'a;
+    fn as_output(&'a mut self) -> Self::Target;
 }
 
 pub trait AsFlex {

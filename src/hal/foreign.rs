@@ -4,24 +4,16 @@ use crate::traits::{AsInput, AsOutput};
 
 use super::gpio::{self, Input, Output};
 
-impl<T: Peripheral<P = impl gpio::Instance>> AsOutput for T {
-    type Target<'a>
-        = Output<'a>
-    where
-        T: 'a;
-
-    fn as_output(&mut self) -> Self::Target<'_> {
+impl<'a, T: Peripheral<P = impl gpio::Instance>> AsOutput<'a> for T {
+    type Target = Output<'a>;
+    fn as_output(&'a mut self) -> Self::Target {
         Output::new(self)
     }
 }
 
-impl<T: Peripheral<P = impl gpio::Instance>> AsInput for T {
-    type Target<'a>
-        = Input<'a>
-    where
-        T: 'a;
-
-    fn as_input(&mut self) -> Self::Target<'_> {
+impl<'a, T: Peripheral<P = impl gpio::Instance>> AsInput<'a> for T {
+    type Target = Input<'a>;
+    fn as_input(&'a mut self) -> Self::Target {
         Input::new(self)
     }
 }
