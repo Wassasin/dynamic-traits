@@ -22,15 +22,8 @@ pub trait AsPinsMut {
     fn as_pins_mut(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>>;
 }
 
-pub trait AsUartMut {
-    type Target<'a>: AsIoReadWriteDevice + 'a
-    where
-        Self: 'a;
-    fn as_uart_mut(&mut self) -> Self::Target<'_>;
-}
-
 /// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency: AsPinsMut {}
+pub trait Dependency: AsPinsMut /*+ AsIoReadWriteDevice */ {}
 
 enum FeatureState {
     PowerOn,
@@ -72,7 +65,7 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
                 state = FeatureState::FullBus;
             }
             FeatureState::FullBus => {
-                // let mut uart_bus = dependencies.as_uart_mut().as_io_read_write();
+                // let mut uart_bus = dependencies.as_io_read_write();
 
                 // uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
 

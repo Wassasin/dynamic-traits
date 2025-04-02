@@ -3,6 +3,7 @@
 pub mod foreign;
 pub mod gpio;
 pub mod i2c;
+pub mod steal;
 pub mod uart;
 
 pub use embassy_hal_internal::Peri;
