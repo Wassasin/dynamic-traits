@@ -3,24 +3,18 @@ use embassy_hal_internal::Peri;
 use crate::hal::gpio::{Input, Instance, Output};
 use crate::traits::{AsInput, AsOutput};
 
-impl<T: Instance> AsOutput for Peri<'_, T> {
-    type Target<'a>
-        = Output<'a>
-    where
-        Self: 'a;
+impl<'a, T: Instance> AsOutput for Peri<'a, T> {
+    type Target = Output<'a>;
 
-    fn as_output(&mut self) -> Self::Target<'_> {
-        Output::new(self.reborrow())
+    fn as_output(self) -> Self::Target {
+        Output::new(self)
     }
 }
 
-impl<T: Instance> AsInput for Peri<'_, T> {
-    type Target<'a>
-        = Input<'a>
-    where
-        Self: 'a;
+impl<'a, T: Instance> AsInput for Peri<'a, T> {
+    type Target = Input<'a>;
 
-    fn as_input(&mut self) -> Self::Target<'_> {
-        Input::new(self.reborrow())
+    fn as_input(self) -> Self::Target {
+        Input::new(self)
     }
 }

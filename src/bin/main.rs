@@ -1,16 +1,17 @@
+use std::convert::Infallible;
 
 use dynamic_traits::{
-    consumer::{self, AsPins, Dependency, Pins},
+    consumer::{self, AsPinsMut, AsUartMut, Dependency, Pins},
     hal::{
         Peri, Peripherals,
         gpio::{Input, Output},
         uart::Uart,
     },
-    traits::AsIoReadWriteDevice,
+    traits::{AsInput, AsIoReadWriteDevice, AsOutput},
 };
 use embassy_executor::Executor;
 use embassy_time::Timer;
-use embedded_hal::digital::OutputPin;
+use embedded_hal::digital::{InputPin, OutputPin};
 use static_cell::StaticCell;
 
 macro_rules! impl_board {
@@ -23,37 +24,108 @@ macro_rules! impl_board {
             uart: Peri<'a, dynamic_traits::hal::peripherals::$uart>,
         }
 
-        impl<'a> AsPins for $board<'a> {
-            type RX = Peri<'a, dynamic_traits::hal::peripherals::$pin_rx>;
-            type TX = Peri<'a, dynamic_traits::hal::peripherals::$pin_tx>;
-
-            fn as_pins(&mut self) -> &mut consumer::Pins<Self::RX, Self::TX> {
-                &mut self.pins
-            }
-        }
-
-        impl AsIoReadWriteDevice for $board<'_> {
-            type Target<'a>
-                = Uart<'a>
+        impl<'a> AsPinsMut for $board<'a> {
+            type RX<'b>
+                = Peri<'b, dynamic_traits::hal::peripherals::$pin_rx>
             where
-                Self: 'a;
+                Self: 'b;
+            type TX<'b>
+                = Peri<'b, dynamic_traits::hal::peripherals::$pin_tx>
+            where
+                Self: 'b;
 
-            fn as_io_read_write(&mut self) -> Self::Target<'_> {
-                Uart::new(
-                    self.uart.reborrow(),
-                    self.pins.rx.reborrow(),
-                    self.pins.tx.reborrow(),
-                )
+            fn as_pins_mut(&mut self) -> consumer::Pins<Self::RX<'_>, Self::TX<'_>> {
+                consumer::Pins {
+                    rx: self.pins.rx.reborrow(),
+                    tx: self.pins.tx.reborrow(),
+                }
             }
         }
 
-        impl Dependency for $board<'_> {}
+        // impl AsIoReadWriteDevice for $board<'_> {
+        //     type Target<'a>
+        //         = Uart<'a>
+        //     where
+        //         Self: 'a;
+
+        //     fn as_io_read_write(&mut self) -> Self::Target<'_> {
+        //         Uart::new(
+        //             self.uart.reborrow(),
+        //             self.pins.rx.reborrow(),
+        //             self.pins.tx.reborrow(),
+        //         )
+        //     }
+        // }
+
+        // impl AsUartMut for $board<'_> {}
+
+        // impl Dependency for $board<'_> {}
     };
 }
 
+impl<'a> AsIoReadWriteDevice for BoardA<'a> {
+    type Target = Uart<'a>;
+
+    fn as_io_read_write(self) -> Self::Target {
+        Uart::new(self.uart, self.pins.rx, self.pins.tx)
+    }
+}
+
+impl AsUartMut for BoardA<'_> {
+    type Target<'b>
+        = BoardA<'b>
+    where
+        Self: 'b;
+
+    fn as_uart_mut(&mut self) -> Self::Target<'_> {
+        BoardA {
+            pins: Pins {
+                rx: self.pins.rx.reborrow(),
+                tx: self.pins.tx.reborrow(),
+            },
+            uart: self.uart.reborrow(),
+        }
+    }
+}
+
+// impl AsUartMut for BoardA<'_> {
+//     type Target<'a>
+//         = &'a mut BoardA<'a>
+//     where
+//         Self: 'a;
+
+//     fn as_uart_mut(&mut self) -> Self::Target<'_> {
+//         &mut self
+//     }
+// }
+
+// trait ComboPin: InputPin<Error = Infallible> + OutputPin<Error = Infallible> {}
+trait ComboPin<'a>: AsInput<Target = Input<'a>> + AsOutput<Target = Output<'a>>
+where
+    Self: 'a,
+{
+}
+impl<'a, T: dynamic_traits::hal::gpio::Instance> ComboPin<'a> for Peri<'a, T> {}
+
+struct DynPins<'a> {
+    rx: &'a mut dyn ComboPin<'a>,
+    tx: &'a mut dyn ComboPin<'a>,
+}
+
+trait ConcreteUart<'a>: AsUartMut<Target<'a> = DynBoard<'a>>
+where
+    Self: 'a,
+{
+}
+
+struct DynBoard<'a> {
+    pins: DynPins<'a>,
+    uart: &'a mut dyn ConcreteUart<'a>,
+}
+
 impl_board!(BoardA, PIN_A, PIN_B, UART0);
-impl_board!(BoardB, PIN_B, PIN_C, UART1);
-impl_board!(BoardC, PIN_C, PIN_D, UART2);
+// impl_board!(BoardB, PIN_B, PIN_C, UART1);
+// impl_board!(BoardC, PIN_C, PIN_D, UART2);
 
 #[derive(Debug)]
 enum Boards {

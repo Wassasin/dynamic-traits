@@ -11,15 +11,26 @@ pub struct Pins<RX, TX> {
     pub tx: TX,
 }
 
-pub trait AsPins {
-    type RX: AsOutput + AsInput;
-    type TX: AsOutput + AsInput;
+pub trait AsPinsMut {
+    type RX<'a>: AsOutput + AsInput + 'a
+    where
+        Self: 'a;
+    type TX<'a>: AsOutput + AsInput + 'a
+    where
+        Self: 'a;
 
-    fn as_pins(&mut self) -> &mut Pins<Self::RX, Self::TX>;
+    fn as_pins_mut(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>>;
+}
+
+pub trait AsUartMut {
+    type Target<'a>: AsIoReadWriteDevice + 'a
+    where
+        Self: 'a;
+    fn as_uart_mut(&mut self) -> Self::Target<'_>;
 }
 
 /// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency: AsIoReadWriteDevice + AsPins {}
+pub trait Dependency: AsUartMut + AsPinsMut {}
 
 enum FeatureState {
     PowerOn,
@@ -49,7 +60,7 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
     loop {
         match state {
             FeatureState::PowerOn => {
-                let pins = dependencies.as_pins();
+                let pins = dependencies.as_pins_mut();
 
                 // Weird chip on the other side needs the bus "de-gaussed"
                 let mut rx_pin = pins.rx.as_output();
@@ -61,7 +72,7 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
                 state = FeatureState::FullBus;
             }
             FeatureState::FullBus => {
-                let mut uart_bus = dependencies.as_io_read_write();
+                let mut uart_bus = dependencies.as_uart_mut().as_io_read_write();
 
                 uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
 
@@ -78,7 +89,7 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
                 }
             }
             FeatureState::BitBanging => {
-                let pins = dependencies.as_pins();
+                let pins = dependencies.as_pins_mut();
 
                 let mut rx_pin = pins.rx.as_input();
                 let mut tx_pin = pins.tx.as_output();
