@@ -1,16 +1,16 @@
 use core::{convert::Infallible, marker::PhantomData};
 
-use embassy_hal_internal::Peripheral;
+use embassy_hal_internal::{Peri, PeripheralType};
 use embedded_io_async::ErrorType;
 
 mod sealed {
     pub trait Instance {}
 }
 
-pub trait Instance: sealed::Instance {}
+pub trait Instance: sealed::Instance + PeripheralType {}
 
-pub trait TxPin<T: Instance> {}
-pub trait RxPin<T: Instance> {}
+pub trait TxPin<T: Instance>: PeripheralType {}
+pub trait RxPin<T: Instance>: PeripheralType {}
 
 pub struct Uart<'a> {
     _lifetime: PhantomData<&'a ()>,
@@ -18,9 +18,9 @@ pub struct Uart<'a> {
 
 impl<'a> Uart<'a> {
     pub fn new<T: Instance>(
-        _peri: impl Peripheral<P = T> + 'a,
-        _rx: impl Peripheral<P = impl RxPin<T>>,
-        _tx: impl Peripheral<P = impl TxPin<T>>,
+        _peri: Peri<'a, T>,
+        _rx: Peri<'a, impl RxPin<T>>,
+        _tx: Peri<'a, impl TxPin<T>>,
     ) -> Self {
         Self {
             _lifetime: PhantomData,

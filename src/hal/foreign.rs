@@ -1,27 +1,26 @@
-use embassy_hal_internal::Peripheral;
+use embassy_hal_internal::Peri;
 
+use crate::hal::gpio::{Input, Instance, Output};
 use crate::traits::{AsInput, AsOutput};
 
-use super::gpio::{self, Input, Output};
-
-impl<T: Peripheral<P = impl gpio::Instance>> AsOutput for T {
+impl<T: Instance> AsOutput for Peri<'_, T> {
     type Target<'a>
         = Output<'a>
     where
-        T: 'a;
+        Self: 'a;
 
     fn as_output(&mut self) -> Self::Target<'_> {
-        Output::new(self)
+        Output::new(self.reborrow())
     }
 }
 
-impl<T: Peripheral<P = impl gpio::Instance>> AsInput for T {
+impl<T: Instance> AsInput for Peri<'_, T> {
     type Target<'a>
         = Input<'a>
     where
-        T: 'a;
+        Self: 'a;
 
     fn as_input(&mut self) -> Self::Target<'_> {
-        Input::new(self)
+        Input::new(self.reborrow())
     }
 }

@@ -1,12 +1,12 @@
 use core::{convert::Infallible, marker::PhantomData};
-use embassy_hal_internal::Peripheral;
+use embassy_hal_internal::{Peri, PeripheralType};
 use embedded_hal::digital::{ErrorType, InputPin, OutputPin};
 
 mod sealed {
     pub trait Instance {}
 }
 
-pub trait Instance: sealed::Instance {}
+pub trait Instance: sealed::Instance + PeripheralType {}
 
 pub struct Flex<'a> {
     _lifetime: PhantomData<&'a ()>,
@@ -16,7 +16,7 @@ pub struct Output<'a>(Flex<'a>);
 pub struct Input<'a>(Flex<'a>);
 
 impl<'a> Flex<'a> {
-    pub fn new<T: Instance>(_pin: impl Peripheral<P = T> + 'a) -> Self {
+    pub fn new<T: Instance>(_pin: Peri<'a, T>) -> Self {
         Self {
             _lifetime: PhantomData,
         }
@@ -24,13 +24,13 @@ impl<'a> Flex<'a> {
 }
 
 impl<'a> Output<'a> {
-    pub fn new<T: Instance>(pin: impl Peripheral<P = T> + 'a) -> Self {
+    pub fn new<T: Instance>(pin: Peri<'a, T>) -> Self {
         Self(Flex::new(pin))
     }
 }
 
 impl<'a> Input<'a> {
-    pub fn new<T: Instance>(pin: impl Peripheral<P = T> + 'a) -> Self {
+    pub fn new<T: Instance>(pin: Peri<'a, T>) -> Self {
         Self(Flex::new(pin))
     }
 }

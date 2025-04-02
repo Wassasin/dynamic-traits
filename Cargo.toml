@@ -16,9 +16,13 @@ embassy-futures = { version = "0.1.1" }
 log = "0.4"
 env_logger = "0.11"
 static_cell = "2.1"
-embassy-executor = { version = "0.7.0", features = ["task-arena-size-32768", "arch-std", "executor-thread", "log"] }
+embassy-executor = { version = "0.7.0", features = [
+    "task-arena-size-32768",
+    "arch-std",
+    "executor-thread",
+    "log",
+] }
 
 # Dependencies for the 'hal' module
-embassy-hal-internal = "0.2.0"
+embassy-hal-internal = { git = "https://github.com/embassy-rs/embassy.git" }
 critical-section = "1.2.0"
-

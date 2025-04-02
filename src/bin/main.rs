@@ -1,7 +1,8 @@
+
 use dynamic_traits::{
     consumer::{self, AsPins, Dependency, Pins},
     hal::{
-        Peripherals,
+        Peri, Peripherals,
         gpio::{Input, Output},
         uart::Uart,
     },
@@ -16,17 +17,17 @@ macro_rules! impl_board {
     ($board:ident, $pin_rx:ident, $pin_tx:ident, $uart:ident) => {
         struct $board<'a> {
             pins: consumer::Pins<
-                &'a mut dynamic_traits::hal::peripherals::$pin_rx,
-                &'a mut dynamic_traits::hal::peripherals::$pin_tx,
+                Peri<'a, dynamic_traits::hal::peripherals::$pin_rx>,
+                Peri<'a, dynamic_traits::hal::peripherals::$pin_tx>,
             >,
-            uart: &'a mut dynamic_traits::hal::peripherals::$uart,
+            uart: Peri<'a, dynamic_traits::hal::peripherals::$uart>,
         }
 
         impl<'a> AsPins for $board<'a> {
-            type RX = &'a mut dynamic_traits::hal::peripherals::$pin_rx;
-            type TX = &'a mut dynamic_traits::hal::peripherals::$pin_tx;
+            type RX = Peri<'a, dynamic_traits::hal::peripherals::$pin_rx>;
+            type TX = Peri<'a, dynamic_traits::hal::peripherals::$pin_tx>;
 
-            fn as_pins<'b>(&'b mut self) -> &'b mut consumer::Pins<Self::RX, Self::TX> {
+            fn as_pins(&mut self) -> &mut consumer::Pins<Self::RX, Self::TX> {
                 &mut self.pins
             }
         }
@@ -38,7 +39,11 @@ macro_rules! impl_board {
                 Self: 'a;
 
             fn as_io_read_write(&mut self) -> Self::Target<'_> {
-                Uart::new(&mut self.uart, &mut self.pins.rx, &mut self.pins.tx)
+                Uart::new(
+                    self.uart.reborrow(),
+                    self.pins.rx.reborrow(),
+                    self.pins.tx.reborrow(),
+                )
             }
         }
 
@@ -68,24 +73,24 @@ impl<'a> AnyBoard<'a> {
         match board {
             Boards::A => AnyBoard::A(BoardA {
                 pins: Pins {
-                    rx: &mut p.PIN_A,
-                    tx: &mut p.PIN_B,
+                    rx: p.PIN_A.reborrow(),
+                    tx: p.PIN_B.reborrow(),
                 },
-                uart: &mut p.UART0,
+                uart: p.UART0.reborrow(),
             }),
             Boards::B => AnyBoard::B(BoardB {
                 pins: Pins {
-                    rx: &mut p.PIN_B,
-                    tx: &mut p.PIN_C,
+                    rx: p.PIN_B.reborrow(),
+                    tx: p.PIN_C.reborrow(),
                 },
-                uart: &mut p.UART1,
+                uart: p.UART1.reborrow(),
             }),
             Boards::C => AnyBoard::C(BoardC {
                 pins: Pins {
-                    rx: &mut p.PIN_C,
-                    tx: &mut p.PIN_D,
+                    rx: p.PIN_C.reborrow(),
+                    tx: p.PIN_D.reborrow(),
                 },
-                uart: &mut p.UART2,
+                uart: p.UART2.reborrow(),
             }),
         }
     }
@@ -95,10 +100,10 @@ impl<'a> AnyBoard<'a> {
 async fn run() {
     let mut p = unsafe { Peripherals::steal() };
     {
-        let mut output = Output::new(&mut p.PIN_A);
+        let mut output = Output::new(p.PIN_A.reborrow());
         output.set_high().unwrap();
 
-        let _input = Input::new(&mut p.PIN_A);
+        let _input = Input::new(p.PIN_A.reborrow());
     }
 
     loop {
