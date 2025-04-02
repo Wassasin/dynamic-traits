@@ -1,4 +1,4 @@
-use std::convert::Infallible;
+use std::{convert::Infallible, marker::PhantomData};
 
 use dynamic_traits::{
     consumer::{self, AsPinsMut, AsUartMut, Dependency, Pins},
@@ -10,6 +10,7 @@ use dynamic_traits::{
     traits::{AsInput, AsIoReadWriteDevice, AsOutput},
 };
 use embassy_executor::Executor;
+use embassy_hal_internal::PeripheralType;
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 use static_cell::StaticCell;
@@ -42,6 +43,17 @@ macro_rules! impl_board {
             }
         }
 
+        impl<'b, 'a: 'b> From<&'a mut $board<'b>> for DynBoard<'a> {
+            fn from(value: &'a mut $board<'b>) -> Self {
+                Self {
+                    pins: DynPins {
+                        rx: &mut value.pins.rx,
+                        tx: &mut value.pins.tx,
+                    },
+                }
+            }
+        }
+
         // impl AsIoReadWriteDevice for $board<'_> {
         //     type Target<'a>
         //         = Uart<'a>
@@ -59,7 +71,7 @@ macro_rules! impl_board {
 
         // impl AsUartMut for $board<'_> {}
 
-        // impl Dependency for $board<'_> {}
+        impl Dependency for $board<'_> {}
     };
 }
 
@@ -105,7 +117,9 @@ where
     Self: 'a,
 {
 }
+
 impl<'a, T: dynamic_traits::hal::gpio::Instance> ComboPin<'a> for Peri<'a, T> {}
+impl<'a, T: dynamic_traits::hal::gpio::Instance> ComboPin<'a> for &'a mut Peri<'a, T> {}
 
 struct DynPins<'a> {
     rx: &'a mut dyn ComboPin<'a>,
@@ -120,12 +134,41 @@ where
 
 struct DynBoard<'a> {
     pins: DynPins<'a>,
-    uart: &'a mut dyn ConcreteUart<'a>,
+    // uart: &'a mut dyn ConcreteUart<'a>,
 }
 
+struct DynPin<'a> {
+    inner: &'a mut dyn ComboPin<'a>,
+}
+
+impl<'a> AsInput for DynPin<'a> {
+    type Target = Input<'a>;
+
+    fn as_input(self) -> Self::Target {
+        self.inner.as_input()
+    }
+}
+
+impl AsPinsMut for DynBoard<'_> {
+    type RX<'a>
+        = DynPin<'a>
+    where
+        Self: 'a;
+
+    type TX<'a>
+        = DynPin<'a>
+    where
+        Self: 'a;
+
+    fn as_pins_mut(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>> {
+        todo!()
+    }
+}
+impl Dependency for DynBoard<'_> {}
+
 impl_board!(BoardA, PIN_A, PIN_B, UART0);
-// impl_board!(BoardB, PIN_B, PIN_C, UART1);
-// impl_board!(BoardC, PIN_C, PIN_D, UART2);
+impl_board!(BoardB, PIN_B, PIN_C, UART1);
+impl_board!(BoardC, PIN_C, PIN_D, UART2);
 
 #[derive(Debug)]
 enum Boards {
@@ -168,6 +211,16 @@ impl<'a> AnyBoard<'a> {
     }
 }
 
+impl<'b, 'a: 'b> From<&'a mut AnyBoard<'b>> for DynBoard<'a> {
+    fn from(value: &'a mut AnyBoard<'b>) -> Self {
+        match value {
+            AnyBoard::A(board_a) => board_a.into(),
+            AnyBoard::B(board_b) => board_b.into(),
+            AnyBoard::C(board_c) => board_c.into(),
+        }
+    }
+}
+
 #[embassy_executor::task]
 async fn run() {
     let mut p = unsafe { Peripherals::steal() };
@@ -183,17 +236,14 @@ async fn run() {
             log::info!("{:?}", board);
 
             let board = AnyBoard::select(&mut p, board);
+            let board: DynBoard<'_> = (&mut board).into();
 
             async fn run(board: impl Dependency) {
                 embassy_futures::select::select(consumer::run(board), Timer::after_millis(100))
                     .await;
             }
 
-            match board {
-                AnyBoard::A(board) => run(board).await,
-                AnyBoard::B(board) => run(board).await,
-                AnyBoard::C(board) => run(board).await,
-            }
+            run(board).await
         }
 
         Timer::after_secs(1).await;

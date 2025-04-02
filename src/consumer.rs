@@ -30,7 +30,7 @@ pub trait AsUartMut {
 }
 
 /// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency: AsUartMut + AsPinsMut {}
+pub trait Dependency: AsPinsMut {}
 
 enum FeatureState {
     PowerOn,
@@ -72,15 +72,15 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
                 state = FeatureState::FullBus;
             }
             FeatureState::FullBus => {
-                let mut uart_bus = dependencies.as_uart_mut().as_io_read_write();
+                // let mut uart_bus = dependencies.as_uart_mut().as_io_read_write();
 
-                uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
+                // uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
 
                 let mut some_buffer_that_exists = [0u8; 4];
                 // This is contrived but shows the states we might expect to enter + exit frequently
-                uart_bus.read(&mut some_buffer_that_exists).await.unwrap();
+                // uart_bus.read(&mut some_buffer_that_exists).await.unwrap();
 
-                drop(uart_bus);
+                // drop(uart_bus);
 
                 if parse(&some_buffer_that_exists).is_err() {
                     state = FeatureState::BitBanging;
