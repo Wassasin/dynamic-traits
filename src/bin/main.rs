@@ -2,7 +2,7 @@ use std::{convert::Infallible, marker::PhantomData};
 
 use dynamic_traits::{
     consumer::{self, AsPinsMut, Dependency, Pins},
-    dynamic::DynPin,
+    dynamic::{DynIoReadWrite, DynPin},
     hal::{
         Peri, Peripherals,
         gpio::{self, Input, Output},
@@ -51,24 +51,18 @@ macro_rules! impl_board {
                         rx: DynPin::from(value.pins.rx),
                         tx: DynPin::from(value.pins.tx),
                     },
+                    uart: DynBoard::new(value),
                 }
             }
         }
 
-        // impl AsIoReadWriteDevice for $board<'_> {
-        //     type Target<'a>
-        //         = Uart<'a>
-        //     where
-        //         Self: 'a;
+        impl<'a> AsIoReadWriteDevice for $board<'a> {
+            type Target = Uart<'a>;
 
-        //     fn as_io_read_write(&mut self) -> Self::Target<'_> {
-        //         Uart::new(
-        //             self.uart.reborrow(),
-        //             self.pins.rx.reborrow(),
-        //             self.pins.tx.reborrow(),
-        //         )
-        //     }
-        // }
+            fn as_io_read_write(self) -> Self::Target {
+                Uart::new(self.uart, self.pins.rx, self.pins.tx)
+            }
+        }
 
         impl Dependency for $board<'_> {}
     };
@@ -120,6 +114,7 @@ type OurDynPin<'a> = DynPin<'a, Input<'a>, Output<'a>>;
 
 struct DynBoard<'a> {
     pins: Pins<OurDynPin<'a>, OurDynPin<'a>>,
+    uart: DynIoReadWrite<'a, Uart<'a>>,
 }
 
 impl AsPinsMut for DynBoard<'_> {
