@@ -2,7 +2,7 @@ use std::{convert::Infallible, marker::PhantomData};
 
 use dynamic_traits::{
     consumer::{self, AsPinsMut, Dependency, Pins},
-    dynamic::{DynIoReadWrite, DynPin},
+    dynamic::{DynEither, DynThief, DynThiefRef},
     hal::{
         Peri, Peripherals,
         gpio::{self, Input, Output},
@@ -44,23 +44,30 @@ macro_rules! impl_board {
             }
         }
 
-        impl<'a> From<$board<'a>> for DynBoard<'a> {
-            fn from(value: $board<'a>) -> Self {
-                Self {
-                    pins: Pins {
-                        rx: DynPin::from(value.pins.rx),
-                        tx: DynPin::from(value.pins.tx),
-                    },
-                    uart: DynBoard::new(value),
-                }
-            }
-        }
+        // impl<'a> From<$board<'a>> for DynBoard<'a> {
+        //     fn from(value: $board<'a>) -> Self {
+        //         Self {
+        //             pins: Pins {
+        //                 rx: DynPin::from(value.pins.rx),
+        //                 tx: DynPin::from(value.pins.tx),
+        //             },
+        //             uart: DynBoard::new(value),
+        //         }
+        //     }
+        // }
 
-        impl<'a> AsIoReadWriteDevice for $board<'a> {
-            type Target = Uart<'a>;
+        impl AsIoReadWriteDevice for $board<'_> {
+            type Target<'a>
+                = Uart<'a>
+            where
+                Self: 'a;
 
-            fn as_io_read_write(self) -> Self::Target {
-                Uart::new(self.uart, self.pins.rx, self.pins.tx)
+            fn as_io_read_write(&mut self) -> Self::Target<'_> {
+                Uart::new(
+                    self.uart.reborrow(),
+                    self.pins.rx.reborrow(),
+                    self.pins.tx.reborrow(),
+                )
             }
         }
 
@@ -81,58 +88,92 @@ enum Boards {
 
 impl<'a> DynBoard<'a> {
     pub fn select(p: &'a mut Peripherals, board: Boards) -> Self {
-        match board {
-            Boards::A => BoardA {
-                pins: Pins {
-                    rx: p.PIN_A.reborrow(),
-                    tx: p.PIN_B.reborrow(),
-                },
-                uart: p.UART0.reborrow(),
-            }
-            .into(),
-            Boards::B => BoardB {
-                pins: Pins {
-                    rx: p.PIN_B.reborrow(),
-                    tx: p.PIN_C.reborrow(),
-                },
-                uart: p.UART1.reborrow(),
-            }
-            .into(),
-            Boards::C => BoardC {
-                pins: Pins {
-                    rx: p.PIN_C.reborrow(),
-                    tx: p.PIN_D.reborrow(),
-                },
-                uart: p.UART2.reborrow(),
-            }
-            .into(),
-        }
+        // match board {
+        //     Boards::A => BoardA {
+        //         pins: Pins {
+        //             rx: p.PIN_A.reborrow(),
+        //             tx: p.PIN_B.reborrow(),
+        //         },
+        //         uart: p.UART0.reborrow(),
+        //     }
+        //     .into(),
+        //     Boards::B => BoardB {
+        //         pins: Pins {
+        //             rx: p.PIN_B.reborrow(),
+        //             tx: p.PIN_C.reborrow(),
+        //         },
+        //         uart: p.UART1.reborrow(),
+        //     }
+        //     .into(),
+        //     Boards::C => BoardC {
+        //         pins: Pins {
+        //             rx: p.PIN_C.reborrow(),
+        //             tx: p.PIN_D.reborrow(),
+        //         },
+        //         uart: p.UART2.reborrow(),
+        //     }
+        //     .into(),
+        // }
+        todo!()
     }
 }
 
-type OurDynPin<'a> = DynPin<'a, Input<'a>, Output<'a>>;
+struct DynPin<'a>(DynEither<'a, Input<'a>, Output<'a>>);
+
+impl AsInput for DynPin<'_> {
+    type Target<'a>
+        = DynThiefRef<'a, Input<'a>>
+    where
+        Self: 'a;
+
+    fn as_input(&mut self) -> Self::Target<'_> {
+        self.0.build_left()
+    }
+}
+
+impl AsOutput for DynPin<'_> {
+    type Target<'a>
+        = DynThiefRef<'a, Output<'a>>
+    where
+        Self: 'a;
+
+    fn as_output(&mut self) -> Self::Target<'_> {
+        self.0.build_right()
+    }
+}
 
 struct DynBoard<'a> {
-    pins: Pins<OurDynPin<'a>, OurDynPin<'a>>,
-    uart: DynIoReadWrite<'a, Uart<'a>>,
+    inner: DynEither<'a, Pins<DynPin<'a>, DynPin<'a>>, DynThief<'a, Uart<'a>>>,
 }
 
 impl AsPinsMut for DynBoard<'_> {
     type RX<'a>
-        = OurDynPin<'a>
+        = DynPin<'a>
     where
         Self: 'a;
 
     type TX<'a>
-        = OurDynPin<'a>
+        = DynPin<'a>
     where
         Self: 'a;
 
     fn as_pins_mut(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>> {
+        let pins = self.inner.build_left();
         Pins {
-            rx: self.pins.rx.reborrow(),
-            tx: self.pins.tx.reborrow(),
+            rx: pins.rx,
+            tx: pins.tx,
         }
+    }
+}
+
+impl AsIoReadWriteDevice for DynBoard<'_> {
+    type Target<'a>
+        = DynThiefRef<'a, Uart<'a>>
+    where
+        Self: 'a;
+
+    fn as_io_read_write(&mut self) -> Self::Target<'_> {
+        self.inner.build_right().build()
     }
 }
 
