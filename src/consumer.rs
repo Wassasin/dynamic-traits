@@ -53,7 +53,7 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
     loop {
         match state {
             FeatureState::PowerOn => {
-                let pins = dependencies.as_pins_mut();
+                let mut pins = dependencies.as_pins_mut();
 
                 // Weird chip on the other side needs the bus "de-gaussed"
                 let mut rx_pin = pins.rx.as_output();
@@ -82,7 +82,7 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
                 }
             }
             FeatureState::BitBanging => {
-                let pins = dependencies.as_pins_mut();
+                let mut pins = dependencies.as_pins_mut();
 
                 let mut rx_pin = pins.rx.as_input();
                 let mut tx_pin = pins.tx.as_output();
