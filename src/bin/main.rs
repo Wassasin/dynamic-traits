@@ -44,6 +44,17 @@ macro_rules! impl_board {
             }
         }
 
+        impl<'a> From<$board<'a>> for DynBoard<'a> {
+            fn from(value: $board<'a>) -> Self {
+                Self {
+                    pins: Pins {
+                        rx: DynPin::from(value.pins.rx),
+                        tx: DynPin::from(value.pins.tx),
+                    },
+                }
+            }
+        }
+
         // impl AsIoReadWriteDevice for $board<'_> {
         //     type Target<'a>
         //         = Uart<'a>
@@ -74,39 +85,36 @@ enum Boards {
     C,
 }
 
-// enum AnyBoard<'a> {
-//     A(BoardA<'a>),
-//     B(BoardB<'a>),
-//     C(BoardC<'a>),
-// }
-
-// impl<'a> AnyBoard<'a> {
-//     pub fn select(p: &'a mut Peripherals, board: Boards) -> Self {
-//         match board {
-//             Boards::A => AnyBoard::A(BoardA {
-//                 pins: Pins {
-//                     rx: p.PIN_A.reborrow(),
-//                     tx: p.PIN_B.reborrow(),
-//                 },
-//                 uart: p.UART0.reborrow(),
-//             }),
-//             Boards::B => AnyBoard::B(BoardB {
-//                 pins: Pins {
-//                     rx: p.PIN_B.reborrow(),
-//                     tx: p.PIN_C.reborrow(),
-//                 },
-//                 uart: p.UART1.reborrow(),
-//             }),
-//             Boards::C => AnyBoard::C(BoardC {
-//                 pins: Pins {
-//                     rx: p.PIN_C.reborrow(),
-//                     tx: p.PIN_D.reborrow(),
-//                 },
-//                 uart: p.UART2.reborrow(),
-//             }),
-//         }
-//     }
-// }
+impl<'a> DynBoard<'a> {
+    pub fn select(p: &'a mut Peripherals, board: Boards) -> Self {
+        match board {
+            Boards::A => BoardA {
+                pins: Pins {
+                    rx: p.PIN_A.reborrow(),
+                    tx: p.PIN_B.reborrow(),
+                },
+                uart: p.UART0.reborrow(),
+            }
+            .into(),
+            Boards::B => BoardB {
+                pins: Pins {
+                    rx: p.PIN_B.reborrow(),
+                    tx: p.PIN_C.reborrow(),
+                },
+                uart: p.UART1.reborrow(),
+            }
+            .into(),
+            Boards::C => BoardC {
+                pins: Pins {
+                    rx: p.PIN_C.reborrow(),
+                    tx: p.PIN_D.reborrow(),
+                },
+                uart: p.UART2.reborrow(),
+            }
+            .into(),
+        }
+    }
+}
 
 type OurDynPin<'a> = DynPin<'a, Input<'a>, Output<'a>>;
 
@@ -135,17 +143,6 @@ impl AsPinsMut for DynBoard<'_> {
 
 impl Dependency for DynBoard<'_> {}
 
-impl<'a> From<BoardA<'a>> for DynBoard<'a> {
-    fn from(value: BoardA<'a>) -> Self {
-        Self {
-            pins: Pins {
-                rx: DynPin::from(value.pins.rx),
-                tx: DynPin::from(value.pins.tx),
-            },
-        }
-    }
-}
-
 #[embassy_executor::task]
 async fn run() {
     let mut p = unsafe { Peripherals::steal() };
@@ -157,27 +154,13 @@ async fn run() {
     }
 
     loop {
-        // for board in [Boards::A, Boards::B, Boards::C] {
-        log::info!("test");
+        for board in [Boards::A, Boards::B, Boards::C] {
+            log::info!("Board {:?}", board);
 
-        // let board = AnyBoard::select(&mut p, board);
+            let board = DynBoard::select(&mut p, board);
 
-        let board = BoardA {
-            pins: Pins {
-                rx: p.PIN_A.reborrow(),
-                tx: p.PIN_B.reborrow(),
-            },
-            uart: p.UART0.reborrow(),
-        };
-
-        let board: DynBoard = board.into();
-
-        async fn run(board: impl Dependency) {
             embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
         }
-
-        run(board).await;
-
         Timer::after_secs(1).await;
     }
 }
