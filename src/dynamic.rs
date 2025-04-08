@@ -1,4 +1,7 @@
-use core::marker::PhantomData;
+use core::{
+    marker::PhantomData,
+    ops::{Deref, DerefMut},
+};
 
 use embassy_hal_internal::{Peri, PeripheralType};
 use embedded_hal::digital::{InputPin, OutputPin};
@@ -76,7 +79,7 @@ pub struct DynThief<'a, O> {
 }
 
 impl<'a, O> DynThief<'a, O> {
-    pub const fn new<I: Stealable + 'a>() -> Self
+    pub const fn new<I: Stealable + 'a>(_i: Peri<'a, I>) -> Self
     where
         Peri<'a, I>: Into<O>,
     {
@@ -85,46 +88,103 @@ impl<'a, O> DynThief<'a, O> {
             f: || Into::into(unsafe { I::steal() }),
         }
     }
-}
 
-impl<O> DynThief<'_, O> {
     pub fn reborrow(&mut self) -> DynThief<'_, O> {
         DynThief {
             f: self.f,
             _lifetime: PhantomData,
         }
     }
-}
 
-impl<O: OutputPin> AsOutput for DynThief<'_, O> {
-    type Target<'a>
-        = O
-    where
-        Self: 'a;
-
-    fn as_output(&mut self) -> Self::Target<'_> {
-        (self.f)()
+    pub fn build(&mut self) -> DynThiefRef<'a, O> {
+        DynThiefRef {
+            inner: (self.f)(),
+            _lifetime: PhantomData,
+        }
     }
 }
 
-impl<O: InputPin> AsInput for DynThief<'_, O> {
-    type Target<'a>
-        = O
-    where
-        Self: 'a;
+pub struct DynThiefRef<'a, O> {
+    inner: O,
+    _lifetime: PhantomData<&'a mut ()>,
+}
 
-    fn as_input(&mut self) -> Self::Target<'_> {
-        (self.f)()
+impl<O> Deref for DynThiefRef<'_, O> {
+    type Target = O;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
     }
 }
 
-impl<O: Read + Write> AsIoReadWriteDevice for DynThief<'_, O> {
-    type Target<'a>
-        = O
-    where
-        Self: 'a;
-
-    fn as_io_read_write(&mut self) -> Self::Target<'_> {
-        (self.f)()
+impl<O> DerefMut for DynThiefRef<'_, O> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
     }
 }
+
+pub struct DynEither<'a, T, U> {
+    left: DynThief<'a, T>,
+    right: DynThief<'a, U>,
+}
+
+impl<'a, T, U> DynEither<'a, T, U> {
+    pub fn new<I: Stealable + 'a>(i: Peri<'a, I>) -> Self
+    where
+        Peri<'a, I>: Into<T> + Into<U>,
+    {
+        // Unsafe: we ensure that the lifetime of left and right do not conflict.
+        Self {
+            left: DynThief::new(unsafe { i.clone_unchecked() }),
+            right: DynThief::new(i),
+        }
+    }
+
+    pub fn reborrow(&mut self) -> DynEither<'_, T, U> {
+        DynEither {
+            left: self.left.reborrow(),
+            right: self.right.reborrow(),
+        }
+    }
+
+    pub fn build_left(&mut self) -> DynThiefRef<'_, T> {
+        self.left.build()
+    }
+
+    pub fn build_right(&mut self) -> DynThiefRef<'_, U> {
+        self.right.build()
+    }
+}
+
+// impl<O: OutputPin> AsOutput for DynThief<'_, O> {
+//     type Target<'a>
+//         = O
+//     where
+//         Self: 'a;
+
+//     fn as_output(&mut self) -> Self::Target<'_> {
+//         (self.f)()
+//     }
+// }
+
+// impl<O: InputPin> AsInput for DynThief<'_, O> {
+//     type Target<'a>
+//         = O
+//     where
+//         Self: 'a;
+
+//     fn as_input(&mut self) -> Self::Target<'_> {
+//         (self.f)()
+//     }
+// }
+
+// impl<O: Read + Write> AsIoReadWriteDevice for DynThief<'_, O> {
+//     type Target<'a>
+//         = O
+//     where
+//         Self: 'a;
+
+//     fn as_io_read_write(&mut self) -> Self::Target<'_> {
+//         (self.f)()
+//     }
+// }
