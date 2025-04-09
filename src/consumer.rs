@@ -21,7 +21,7 @@ pub trait AsPinsMut: Sized {
 }
 
 /// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency: AsPinsMut + AsIoReadWriteDevice + OwnedEraseable {}
+pub trait Dependency: AsPinsMut + for<'a> AsIoReadWriteDevice<'a> + OwnedEraseable {}
 
 enum FeatureState {
     PowerOn,
@@ -48,6 +48,8 @@ pub async fn run(mut dependencies: Owned<'_, impl Dependency>) -> ! {
 
     let mut state = FeatureState::PowerOn;
 
+    let mut dependencies = dependencies.reborrow();
+
     loop {
         match state {
             FeatureState::PowerOn => {
@@ -61,6 +63,9 @@ pub async fn run(mut dependencies: Owned<'_, impl Dependency>) -> ! {
                 tx_pin.set_high().unwrap();
 
                 state = FeatureState::FullBus;
+
+                drop(rx_pin);
+                drop(tx_pin);
             }
             FeatureState::FullBus => {
                 let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(dependencies.reborrow());

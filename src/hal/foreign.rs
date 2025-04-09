@@ -1,33 +1,21 @@
 use embassy_hal_internal::Peri;
 
-// use crate::dynamic::DynPin;
+use crate::dynamic::Owned;
 use crate::hal::gpio::{Input, Instance, Output};
 use crate::traits::{AsInput, AsOutput};
 
-impl<T: Instance> AsOutput for Peri<'_, T> {
-    type Target<'a>
-        = Output<'a>
-    where
-        Self: 'a;
+impl<'b, T: Instance> AsOutput<'b> for Peri<'b, T> {
+    type Target = Output<'b>;
 
-    fn as_output(mut value: crate::dynamic::Owned<'_, Self>) -> Self::Target<'_> {
-        Output::new(value.reborrow().into())
+    fn as_output(value: Owned<'b, Self>) -> Self::Target {
+        Output::new(value.into())
     }
 }
 
-impl<T: Instance> AsInput for Peri<'_, T> {
-    type Target<'a>
-        = Input<'a>
-    where
-        Self: 'a;
+impl<'b, T: Instance> AsInput<'b> for Peri<'b, T> {
+    type Target = Input<'b>;
 
-    fn as_input(&mut self) -> Self::Target<'_> {
-        Input::new(self.reborrow())
+    fn as_input(value: Owned<'b, Self>) -> Self::Target {
+        Input::new(value.into())
     }
 }
-
-// impl<'a, T: Instance> From<Peri<'a, T>> for DynPin<'a, Input<'a>, Output<'a>> {
-//     fn from(value: Peri<'a, T>) -> Self {
-//         DynPin::new(value)
-//     }
-// }
