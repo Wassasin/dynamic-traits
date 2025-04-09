@@ -79,6 +79,21 @@ impl_board!(BoardA, PIN_A, PIN_B, UART0);
 impl_board!(BoardB, PIN_B, PIN_C, UART1);
 impl_board!(BoardC, PIN_C, PIN_D, UART2);
 
+impl<'a> From<BoardA<'a>> for DynBoard<'a> {
+    fn from(value: BoardA<'a>) -> Self {
+        Self {
+            inner: DynEither::new(i),
+        }
+        // Self {
+        //     pins: Pins {
+        //         rx: DynPin::from(value.pins.rx),
+        //         tx: DynPin::from(value.pins.tx),
+        //     },
+        //     uart: DynBoard::new(value),
+        // }
+    }
+}
+
 #[derive(Debug)]
 enum Boards {
     A,
@@ -122,23 +137,23 @@ struct DynPin<'a>(DynEither<'a, Input<'a>, Output<'a>>);
 
 impl AsInput for DynPin<'_> {
     type Target<'a>
-        = DynThiefRef<'a, Input<'a>>
+        = Input<'a>
     where
         Self: 'a;
 
     fn as_input(&mut self) -> Self::Target<'_> {
-        self.0.build_left()
+        self.0.build_left().into()
     }
 }
 
 impl AsOutput for DynPin<'_> {
     type Target<'a>
-        = DynThiefRef<'a, Output<'a>>
+        = Output<'a>
     where
         Self: 'a;
 
     fn as_output(&mut self) -> Self::Target<'_> {
-        self.0.build_right()
+        self.0.build_right().into()
     }
 }
 
@@ -158,7 +173,7 @@ impl AsPinsMut for DynBoard<'_> {
         Self: 'a;
 
     fn as_pins_mut(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>> {
-        let pins = self.inner.build_left();
+        let pins = unsafe { self.inner.build_left().into_inner() };
         Pins {
             rx: pins.rx,
             tx: pins.tx,
@@ -168,12 +183,12 @@ impl AsPinsMut for DynBoard<'_> {
 
 impl AsIoReadWriteDevice for DynBoard<'_> {
     type Target<'a>
-        = DynThiefRef<'a, Uart<'a>>
+        = Uart<'a>
     where
         Self: 'a;
 
     fn as_io_read_write(&mut self) -> Self::Target<'_> {
-        self.inner.build_right().build()
+        unsafe { self.inner.build_right().build().into_inner() }
     }
 }
 

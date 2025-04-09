@@ -4,11 +4,14 @@ use core::{
 };
 
 use embassy_hal_internal::{Peri, PeripheralType};
-use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal::digital::{ErrorType, InputPin, OutputPin};
 use embedded_io_async::{Read, Write};
 
 use crate::{
-    hal::steal::Stealable,
+    hal::{
+        gpio::{Input, Output},
+        steal::Stealable,
+    },
     traits::{AsInput, AsIoReadWriteDevice, AsOutput},
 };
 
@@ -123,6 +126,12 @@ impl<O> DerefMut for DynThiefRef<'_, O> {
     }
 }
 
+impl<O> DynThiefRef<'_, O> {
+    pub unsafe fn into_inner(self) -> O {
+        self.inner
+    }
+}
+
 pub struct DynEither<'a, T, U> {
     left: DynThief<'a, T>,
     right: DynThief<'a, U>,
@@ -155,6 +164,42 @@ impl<'a, T, U> DynEither<'a, T, U> {
         self.right.build()
     }
 }
+
+impl<'a> Into<Input<'a>> for DynThiefRef<'a, Input<'a>> {
+    fn into(self) -> Input<'a> {
+        self.inner
+    }
+}
+
+impl<'a> Into<Output<'a>> for DynThiefRef<'a, Output<'a>> {
+    fn into(self) -> Output<'a> {
+        self.inner
+    }
+}
+
+// impl<O: ErrorType> ErrorType for DynThiefRef<'_, O> {
+//     type Error = O::Error;
+// }
+
+// impl<O: OutputPin> OutputPin for DynThiefRef<'_, O> {
+//     fn set_low(&mut self) -> Result<(), Self::Error> {
+//         self.inner.set_low()
+//     }
+
+//     fn set_high(&mut self) -> Result<(), Self::Error> {
+//         self.inner.set_high()
+//     }
+// }
+
+// impl<O: InputPin> InputPin for DynThiefRef<'_, O> {
+//     fn is_high(&mut self) -> Result<bool, Self::Error> {
+//         self.inner.is_high()
+//     }
+
+//     fn is_low(&mut self) -> Result<bool, Self::Error> {
+//         self.inner.is_low()
+//     }
+// }
 
 // impl<O: OutputPin> AsOutput for DynThief<'_, O> {
 //     type Target<'a>
