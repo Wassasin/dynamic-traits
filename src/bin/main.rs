@@ -2,10 +2,11 @@ use std::{convert::Infallible, marker::PhantomData};
 
 use dynamic_traits::{
     consumer::{self, AsPinsMut, Dependency, Pins},
-    dynamic::{DynEither, DynThief, DynThiefRef},
+    dynamic::{DynEither, DynThief, Owned, OwnedEraseable},
     hal::{
         Peri, Peripherals,
         gpio::{self, Input, Output},
+        peripherals::{PIN_A, PIN_B, UART0},
         uart::Uart,
     },
     traits::{AsInput, AsIoReadWriteDevice, AsOutput},
@@ -79,10 +80,24 @@ impl_board!(BoardA, PIN_A, PIN_B, UART0);
 impl_board!(BoardB, PIN_B, PIN_C, UART1);
 impl_board!(BoardC, PIN_C, PIN_D, UART2);
 
+impl OwnedEraseable for BoardA<'_> {
+    unsafe fn steal<'a>() -> dynamic_traits::dynamic::Owned<'a, Self> {
+        unsafe {
+            Owned::new(BoardA {
+                pins: Pins {
+                    rx: PIN_A::steal(),
+                    tx: PIN_B::steal(),
+                },
+                uart: UART0::steal(),
+            })
+        }
+    }
+}
+
 impl<'a> From<BoardA<'a>> for DynBoard<'a> {
-    fn from(value: BoardA<'a>) -> Self {
+    fn from(mut value: BoardA<'a>) -> Self {
         Self {
-            inner: DynEither::new(i),
+            inner: DynEither::new(&mut value),
         }
         // Self {
         //     pins: Pins {
@@ -173,7 +188,7 @@ impl AsPinsMut for DynBoard<'_> {
         Self: 'a;
 
     fn as_pins_mut(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>> {
-        let pins = unsafe { self.inner.build_left().into_inner() };
+        let pins = unsafe { self.inner.build_left().into() };
         Pins {
             rx: pins.rx,
             tx: pins.tx,
@@ -188,7 +203,7 @@ impl AsIoReadWriteDevice for DynBoard<'_> {
         Self: 'a;
 
     fn as_io_read_write(&mut self) -> Self::Target<'_> {
-        unsafe { self.inner.build_right().build().into_inner() }
+        unsafe { self.inner.build_right().build().into() }
     }
 }
 

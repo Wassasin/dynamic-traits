@@ -10,8 +10,8 @@ impl<T: Instance> AsOutput for Peri<'_, T> {
     where
         Self: 'a;
 
-    fn as_output(&mut self) -> Self::Target<'_> {
-        Output::new(self.reborrow())
+    fn as_output(mut value: crate::dynamic::Owned<'_, Self>) -> Self::Target<'_> {
+        Output::new(value.reborrow().into())
     }
 }
 

@@ -76,15 +76,85 @@ use crate::{
 //     }
 // }
 
+pub struct Owned<'a, T> {
+    inner: T,
+    _lifetime: PhantomData<&'a mut ()>,
+}
+
+impl<'a, T> Owned<'a, T> {
+    pub const fn new(inner: T) -> Self {
+        Owned {
+            inner,
+            _lifetime: PhantomData,
+        }
+    }
+}
+
+impl<'a, T: OwnedEraseable> Owned<'a, T> {
+    pub fn reborrow<'b>(&'b mut self) -> Owned<'b, T>
+    where
+        'a: 'b,
+    {
+        unsafe { T::steal() }
+    }
+}
+
+impl<'a, T: PeripheralType> Into<Owned<'a, Peri<'a, T>>> for Peri<'a, T> {
+    fn into(self) -> Owned<'a, Peri<'a, T>> {
+        Owned::new(self)
+    }
+}
+
+impl<'a, T: PeripheralType> Into<Peri<'a, T>> for Owned<'a, Peri<'a, T>> {
+    fn into(self) -> Peri<'a, T> {
+        self.inner
+    }
+}
+
+impl<T> Deref for Owned<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &Self::Target {
+        &self.inner
+    }
+}
+
+impl<T> DerefMut for Owned<'_, T> {
+    fn deref_mut(&mut self) -> &mut Self::Target {
+        &mut self.inner
+    }
+}
+
+pub trait OwnedEraseable: Sized {
+    unsafe fn steal<'a>() -> Owned<'a, Self>;
+}
+
+impl<T> OwnedEraseable for Peri<'_, T>
+where
+    T: Stealable,
+{
+    unsafe fn steal<'a>() -> Owned<'a, Self> {
+        Owned::new(unsafe { T::steal() })
+    }
+}
+
 pub struct DynThief<'a, O> {
     f: fn() -> O,
     _lifetime: PhantomData<&'a mut ()>,
 }
 
 impl<'a, O> DynThief<'a, O> {
-    pub const fn new<I: Stealable + 'a>(_i: Peri<'a, I>) -> Self
+    pub const fn new<I: OwnedEraseable + 'a>(_i: &'a mut I) -> Self
     where
-        Peri<'a, I>: Into<O>,
+        Owned<'a, I>: Into<O>,
+    {
+        // Unsafe: we bind the lifetime by the argument
+        unsafe { Self::new_unsafe() }
+    }
+
+    pub const unsafe fn new_unsafe<I: OwnedEraseable + 'a>() -> Self
+    where
+        Owned<'a, I>: Into<O>,
     {
         Self {
             _lifetime: PhantomData,
@@ -99,36 +169,11 @@ impl<'a, O> DynThief<'a, O> {
         }
     }
 
-    pub fn build(&mut self) -> DynThiefRef<'a, O> {
-        DynThiefRef {
+    pub fn build(&mut self) -> Owned<'a, O> {
+        Owned {
             inner: (self.f)(),
             _lifetime: PhantomData,
         }
-    }
-}
-
-pub struct DynThiefRef<'a, O> {
-    inner: O,
-    _lifetime: PhantomData<&'a mut ()>,
-}
-
-impl<O> Deref for DynThiefRef<'_, O> {
-    type Target = O;
-
-    fn deref(&self) -> &Self::Target {
-        &self.inner
-    }
-}
-
-impl<O> DerefMut for DynThiefRef<'_, O> {
-    fn deref_mut(&mut self) -> &mut Self::Target {
-        &mut self.inner
-    }
-}
-
-impl<O> DynThiefRef<'_, O> {
-    pub unsafe fn into_inner(self) -> O {
-        self.inner
     }
 }
 
@@ -138,14 +183,15 @@ pub struct DynEither<'a, T, U> {
 }
 
 impl<'a, T, U> DynEither<'a, T, U> {
-    pub fn new<I: Stealable + 'a>(i: Peri<'a, I>) -> Self
+    pub fn new<I: OwnedEraseable + 'a>(_i: &'a mut I) -> Self
     where
-        Peri<'a, I>: Into<T> + Into<U>,
+        Owned<'a, I>: Into<T> + Into<U>,
     {
         // Unsafe: we ensure that the lifetime of left and right do not conflict.
+        // We bind the lifetime with the argument.
         Self {
-            left: DynThief::new(unsafe { i.clone_unchecked() }),
-            right: DynThief::new(i),
+            left: unsafe { DynThief::new_unsafe() },
+            right: unsafe { DynThief::new_unsafe() },
         }
     }
 
@@ -156,50 +202,26 @@ impl<'a, T, U> DynEither<'a, T, U> {
         }
     }
 
-    pub fn build_left(&mut self) -> DynThiefRef<'_, T> {
+    pub fn build_left(&mut self) -> Owned<'_, T> {
         self.left.build()
     }
 
-    pub fn build_right(&mut self) -> DynThiefRef<'_, U> {
+    pub fn build_right(&mut self) -> Owned<'_, U> {
         self.right.build()
     }
 }
 
-impl<'a> Into<Input<'a>> for DynThiefRef<'a, Input<'a>> {
+impl<'a> Into<Input<'a>> for Owned<'a, Input<'a>> {
     fn into(self) -> Input<'a> {
         self.inner
     }
 }
 
-impl<'a> Into<Output<'a>> for DynThiefRef<'a, Output<'a>> {
+impl<'a> Into<Output<'a>> for Owned<'a, Output<'a>> {
     fn into(self) -> Output<'a> {
         self.inner
     }
 }
-
-// impl<O: ErrorType> ErrorType for DynThiefRef<'_, O> {
-//     type Error = O::Error;
-// }
-
-// impl<O: OutputPin> OutputPin for DynThiefRef<'_, O> {
-//     fn set_low(&mut self) -> Result<(), Self::Error> {
-//         self.inner.set_low()
-//     }
-
-//     fn set_high(&mut self) -> Result<(), Self::Error> {
-//         self.inner.set_high()
-//     }
-// }
-
-// impl<O: InputPin> InputPin for DynThiefRef<'_, O> {
-//     fn is_high(&mut self) -> Result<bool, Self::Error> {
-//         self.inner.is_high()
-//     }
-
-//     fn is_low(&mut self) -> Result<bool, Self::Error> {
-//         self.inner.is_low()
-//     }
-// }
 
 // impl<O: OutputPin> AsOutput for DynThief<'_, O> {
 //     type Target<'a>
