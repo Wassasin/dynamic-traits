@@ -251,9 +251,10 @@ impl AsIoReadWriteDevice for DynBoard<'_> {
 }
 
 impl Reborrowable for DynBoard<'_> {
-    fn reborrow<'a, 'b: 'a>(value: &'a mut Owned<'b, Self>) -> Owned<'a, Self> {
+    type Target = DynEither<'_, Pins<DynPin<'_>, DynPin<'_>>, Uart<'_>>;
+    fn reborrow<'a, 'b: 'a>(value: &'a mut Owned<'b, Self>) -> Owned<'a, Self::Target> {
         let inner = value.inner.reborrow();
-        Owned::new(DynBoard { inner })
+        Owned::new(inner)
     }
 }
 

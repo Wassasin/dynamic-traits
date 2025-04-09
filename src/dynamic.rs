@@ -104,7 +104,9 @@ impl<'a, T: 'a> Owned<'a, T> {
 }
 
 pub trait Reborrowable: Sized {
-    fn reborrow<'a, 'b: 'a>(value: &'a mut Owned<'b, Self>) -> Owned<'a, Self>;
+    fn reborrow<'a, 'b: 'a>(value: &'b mut Owned<'b, Self>) -> Owned<'a, Self>
+    where
+        Self: 'a;
 }
 
 // impl<'c, T: OwnedEraseable<'c>> Reborrowable for T {

@@ -30,7 +30,7 @@ pub trait AsPinsMut: Sized {
 }
 
 /// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency: AsPinsMut + for<'a> AsIoReadWriteDevice + Reborrowable {}
+pub trait Dependency: AsPinsMut + AsIoReadWriteDevice {}
 
 enum FeatureState {
     PowerOn,
@@ -52,15 +52,16 @@ async fn wait_for_something() {
 }
 
 /// Core logic implemented by this crate.
-pub async fn run(mut dependencies: Owned<'_, impl Dependency>) -> ! {
+pub async fn run<U: Dependency + Reborrowable>(mut dependencies: Owned<'_, U>) -> ! {
     const MAGIC_SEQUENCE_TO_STARTUP: [u8; 4] = [0x01, 0x02, 0x03, 0xff];
 
     let mut state = FeatureState::PowerOn;
 
     loop {
+        let dependencies = Reborrowable::reborrow(&mut dependencies);
         match state {
             FeatureState::PowerOn => {
-                let pins = AsPinsMut::as_pins_mut(Reborrowable::reborrow(&mut dependencies));
+                let pins = AsPinsMut::as_pins_mut(dependencies);
 
                 // Weird chip on the other side needs the bus "de-gaussed"
                 let mut rx_pin = AsOutput::as_output(pins.rx);
@@ -72,9 +73,7 @@ pub async fn run(mut dependencies: Owned<'_, impl Dependency>) -> ! {
                 state = FeatureState::FullBus;
             }
             FeatureState::FullBus => {
-                let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(Reborrowable::reborrow(
-                    &mut dependencies,
-                ));
+                let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(dependencies);
 
                 uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
 
@@ -91,7 +90,7 @@ pub async fn run(mut dependencies: Owned<'_, impl Dependency>) -> ! {
                 }
             }
             FeatureState::BitBanging => {
-                let pins = AsPinsMut::as_pins_mut(Reborrowable::reborrow(&mut dependencies));
+                let pins = AsPinsMut::as_pins_mut(dependencies);
 
                 let mut rx_pin = AsInput::as_input(pins.rx);
                 let mut tx_pin = AsOutput::as_output(pins.tx);
