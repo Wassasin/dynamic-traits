@@ -1,8 +1,8 @@
-use std::{convert::Infallible, marker::PhantomData};
+use std::{convert::Infallible, marker::PhantomData, ops::DerefMut};
 
 use dynamic_traits::{
     consumer::{self, AsPinsMut, Dependency, Pins},
-    dynamic::{DynEither, DynThief, Owned, OwnedEraseable},
+    dynamic::{DynEither, DynThief, Owned, OwnedEraseable, Reborrowable},
     hal::{
         Peri, Peripherals,
         gpio::{self, Input, Output},
@@ -27,23 +27,23 @@ macro_rules! impl_board {
             uart: Peri<'a, dynamic_traits::hal::peripherals::$uart>,
         }
 
-        impl<'a> AsPinsMut for $board<'a> {
-            type RX<'b>
-                = Peri<'b, dynamic_traits::hal::peripherals::$pin_rx>
-            where
-                Self: 'b;
-            type TX<'b>
-                = Peri<'b, dynamic_traits::hal::peripherals::$pin_tx>
-            where
-                Self: 'b;
+        // impl<'a> AsPinsMut for $board<'a> {
+        //     type RX<'b>
+        //         = Peri<'b, dynamic_traits::hal::peripherals::$pin_rx>
+        //     where
+        //         Self: 'b;
+        //     type TX<'b>
+        //         = Peri<'b, dynamic_traits::hal::peripherals::$pin_tx>
+        //     where
+        //         Self: 'b;
 
-            fn as_pins_mut(&mut self) -> consumer::Pins<Self::RX<'_>, Self::TX<'_>> {
-                consumer::Pins {
-                    rx: self.pins.rx.reborrow(),
-                    tx: self.pins.tx.reborrow(),
-                }
-            }
-        }
+        //     fn as_pins_mut(&mut self) -> consumer::Pins<Self::RX<'_>, Self::TX<'_>> {
+        //         consumer::Pins {
+        //             rx: self.pins.rx.reborrow(),
+        //             tx: self.pins.tx.reborrow(),
+        //         }
+        //     }
+        // }
 
         // impl<'a> From<$board<'a>> for DynBoard<'a> {
         //     fn from(value: $board<'a>) -> Self {
@@ -57,31 +57,31 @@ macro_rules! impl_board {
         //     }
         // }
 
-        impl AsIoReadWriteDevice for $board<'_> {
-            type Target<'a>
-                = Uart<'a>
-            where
-                Self: 'a;
+        // impl AsIoReadWriteDevice for $board<'_> {
+        //     type Target<'a>
+        //         = Uart<'a>
+        //     where
+        //         Self: 'a;
 
-            fn as_io_read_write(&mut self) -> Self::Target<'_> {
-                Uart::new(
-                    self.uart.reborrow(),
-                    self.pins.rx.reborrow(),
-                    self.pins.tx.reborrow(),
-                )
-            }
-        }
+        //     fn as_io_read_write(&mut self) -> Self::Target<'_> {
+        //         Uart::new(
+        //             self.uart.reborrow(),
+        //             self.pins.rx.reborrow(),
+        //             self.pins.tx.reborrow(),
+        //         )
+        //     }
+        // }
 
-        impl Dependency for $board<'_> {}
+        // impl Dependency for $board<'_> {}
     };
 }
 
 impl_board!(BoardA, PIN_A, PIN_B, UART0);
-impl_board!(BoardB, PIN_B, PIN_C, UART1);
-impl_board!(BoardC, PIN_C, PIN_D, UART2);
+// impl_board!(BoardB, PIN_B, PIN_C, UART1);
+// impl_board!(BoardC, PIN_C, PIN_D, UART2);
 
-impl OwnedEraseable for BoardA<'_> {
-    unsafe fn steal<'a>() -> dynamic_traits::dynamic::Owned<'a, Self> {
+impl<'a> OwnedEraseable<'a> for BoardA<'a> {
+    unsafe fn magick() -> dynamic_traits::dynamic::Owned<'a, Self> {
         unsafe {
             Owned::new(BoardA {
                 pins: Pins {
@@ -94,18 +94,25 @@ impl OwnedEraseable for BoardA<'_> {
     }
 }
 
-impl<'a> From<BoardA<'a>> for DynBoard<'a> {
-    fn from(mut value: BoardA<'a>) -> Self {
-        Self {
-            inner: DynEither::new(&mut value),
-        }
-        // Self {
-        //     pins: Pins {
-        //         rx: DynPin::from(value.pins.rx),
-        //         tx: DynPin::from(value.pins.tx),
-        //     },
-        //     uart: DynBoard::new(value),
-        // }
+// impl<'a> From<Owned<'a, BoardA<'a>>> for DynBoard<'a> {
+//     fn from(mut value: Owned<'a, BoardA<'a>>) -> Self {
+//         let value: Owned<'_, DynBoard<'_>> = value.into();
+//         Self {
+//             inner: DynEither::new(value),
+//         }
+//         // Self {
+//         //     pins: Pins {
+//         //         rx: DynPin::from(value.pins.rx),
+//         //         tx: DynPin::from(value.pins.tx),
+//         //     },
+//         //     uart: DynBoard::new(value),
+//         // }
+//     }
+// }
+
+impl<'a> Into<Pins<DynPin<'a>, DynPin<'a>>> for &'a mut BoardA<'a> {
+    fn into(self) -> Pins<DynPin<'a>, DynPin<'a>> {
+        todo!()
     }
 }
 
@@ -150,30 +157,50 @@ impl<'a> DynBoard<'a> {
 
 struct DynPin<'a>(DynEither<'a, Input<'a>, Output<'a>>);
 
-impl AsInput for DynPin<'_> {
-    type Target<'a>
-        = Input<'a>
-    where
-        Self: 'a;
-
-    fn as_input(&mut self) -> Self::Target<'_> {
-        self.0.build_left().into()
+impl<'a> Into<DynEither<'a, Input<'a>, Output<'a>>> for DynPin<'a> {
+    fn into(self) -> DynEither<'a, Input<'a>, Output<'a>> {
+        self.0
     }
 }
 
-impl AsOutput for DynPin<'_> {
-    type Target<'a>
-        = Output<'a>
-    where
-        Self: 'a;
+impl<'a> DynPin<'a> {
+    pub fn reborrow(&mut self) -> DynPin<'_> {
+        DynPin(self.0.reborrow())
+    }
+}
 
-    fn as_output(&mut self) -> Self::Target<'_> {
-        self.0.build_right().into()
+impl<'a> AsInput<'a> for DynPin<'a> {
+    type Target = Input<'a>;
+
+    fn as_input(value: Owned<'a, Self>) -> Self::Target {
+        let value: Owned<'a, DynEither<'a, Input<'a>, Output<'a>>> = Owned::into(value);
+        let value: DynEither<'a, Input<'a>, Output<'a>> = Into::into(value);
+        let value: DynThief<'a, Input<'a>> = value.left();
+        let value: Owned<'a, Input<'a>> = value.build();
+        Into::into(value)
+    }
+}
+
+impl<'a> AsOutput<'a> for DynPin<'a> {
+    type Target = Output<'a>;
+
+    fn as_output(value: Owned<'a, Self>) -> Self::Target {
+        let value: Owned<'a, DynEither<'a, Input<'a>, Output<'a>>> = Owned::into(value);
+        let value: DynEither<'a, Input<'a>, Output<'a>> = Into::into(value);
+        let value: DynThief<'_, Output<'a>> = value.right();
+        let value: Owned<'_, Output<'_>> = value.build();
+        Into::into(value)
     }
 }
 
 struct DynBoard<'a> {
-    inner: DynEither<'a, Pins<DynPin<'a>, DynPin<'a>>, DynThief<'a, Uart<'a>>>,
+    inner: DynEither<'a, Pins<DynPin<'a>, DynPin<'a>>, Uart<'a>>,
+}
+
+impl<'a> Into<DynEither<'a, Pins<DynPin<'a>, DynPin<'a>>, Uart<'a>>> for DynBoard<'a> {
+    fn into(self) -> DynEither<'a, Pins<DynPin<'a>, DynPin<'a>>, Uart<'a>> {
+        self.inner
+    }
 }
 
 impl AsPinsMut for DynBoard<'_> {
@@ -181,17 +208,26 @@ impl AsPinsMut for DynBoard<'_> {
         = DynPin<'a>
     where
         Self: 'a;
-
     type TX<'a>
         = DynPin<'a>
     where
         Self: 'a;
 
-    fn as_pins_mut(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>> {
-        let pins = unsafe { self.inner.build_left().into() };
+    fn as_pins_mut<'a>(
+        value: Owned<'a, Self>,
+    ) -> Pins<Owned<'a, Self::RX<'a>>, Owned<'a, Self::TX<'a>>>
+    where
+        Self: 'a,
+    {
+        let value: Owned<'a, DynEither<'a, _, _>> = Owned::into(value);
+        let value: DynEither<'_, _, _> = Into::into(value);
+        let value: DynThief<'_, Pins<DynPin<'_>, _>> = value.left();
+        let value: Owned<'_, Pins<DynPin<'_>, DynPin<'_>>> = value.build();
+        let value: Pins<DynPin<'a>, DynPin<'a>> = Into::into(value);
+
         Pins {
-            rx: pins.rx,
-            tx: pins.tx,
+            rx: Owned::new(value.rx),
+            tx: Owned::new(value.tx),
         }
     }
 }
@@ -202,8 +238,22 @@ impl AsIoReadWriteDevice for DynBoard<'_> {
     where
         Self: 'a;
 
-    fn as_io_read_write(&mut self) -> Self::Target<'_> {
-        unsafe { self.inner.build_right().build().into() }
+    fn as_io_read_write<'a, 'b: 'a>(value: Owned<'b, Self>) -> Self::Target<'a>
+    where
+        Self: 'a,
+    {
+        let value: Owned<'_, DynEither<'_, _, _>> = Owned::into(value);
+        let value: DynEither<'_, _, Uart<'_>> = Into::into(value);
+        let value: DynThief<'_, Uart<'_>> = value.right();
+        let value: Owned<'_, Uart<'_>> = value.build();
+        Into::into(value)
+    }
+}
+
+impl Reborrowable for DynBoard<'_> {
+    fn reborrow<'a, 'b: 'a>(value: &'a mut Owned<'b, Self>) -> Owned<'a, Self> {
+        let inner = value.inner.reborrow();
+        Owned::new(DynBoard { inner })
     }
 }
 
@@ -225,7 +275,11 @@ async fn run() {
 
             let board = DynBoard::select(&mut p, board);
 
-            embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
+            embassy_futures::select::select(
+                consumer::run(Owned::new(board)),
+                Timer::after_millis(100),
+            )
+            .await;
         }
         Timer::after_secs(1).await;
     }

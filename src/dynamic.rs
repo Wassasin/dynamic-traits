@@ -8,9 +8,11 @@ use embedded_hal::digital::{ErrorType, InputPin, OutputPin};
 use embedded_io_async::{Read, Write};
 
 use crate::{
+    consumer::Pins,
     hal::{
         gpio::{Input, Output},
         steal::Stealable,
+        uart::Uart,
     },
     traits::{AsInput, AsIoReadWriteDevice, AsOutput},
 };
@@ -81,23 +83,35 @@ pub struct Owned<'a, T> {
     _lifetime: PhantomData<&'a mut ()>,
 }
 
-impl<'a, T> Owned<'a, T> {
+impl<'a, T: 'a> Owned<'a, T> {
     pub const fn new(inner: T) -> Self {
         Owned {
             inner,
             _lifetime: PhantomData,
         }
     }
-}
 
-impl<'a, T: OwnedEraseable> Owned<'a, T> {
-    pub fn reborrow<'b>(&'b mut self) -> Owned<'b, T>
+    pub fn into<U>(self) -> Owned<'a, U>
     where
-        'a: 'b,
+        T: Into<U>,
+        Self: 'a,
     {
-        unsafe { T::steal() }
+        Owned {
+            inner: self.inner.into(),
+            _lifetime: PhantomData,
+        }
     }
 }
+
+pub trait Reborrowable: Sized {
+    fn reborrow<'a, 'b: 'a>(value: &'a mut Owned<'b, Self>) -> Owned<'a, Self>;
+}
+
+// impl<'c, T: OwnedEraseable<'c>> Reborrowable for T {
+//     fn reborrow<'a, 'b: 'a>(_value: Owned<'a, Self>) -> Owned<'b, Self> {
+//         unsafe { T::magick() }
+//     }
+// }
 
 impl<'a, T: PeripheralType> Into<Owned<'a, Peri<'a, T>>> for Peri<'a, T> {
     fn into(self) -> Owned<'a, Peri<'a, T>> {
@@ -107,6 +121,18 @@ impl<'a, T: PeripheralType> Into<Owned<'a, Peri<'a, T>>> for Peri<'a, T> {
 
 impl<'a, T: PeripheralType> Into<Peri<'a, T>> for Owned<'a, Peri<'a, T>> {
     fn into(self) -> Peri<'a, T> {
+        self.inner
+    }
+}
+
+impl<'a, T> Into<DynThief<'a, T>> for Owned<'a, DynThief<'a, T>> {
+    fn into(self) -> DynThief<'a, T> {
+        self.inner
+    }
+}
+
+impl<'a, T, U> Into<DynEither<'a, T, U>> for Owned<'a, DynEither<'a, T, U>> {
+    fn into(self) -> DynEither<'a, T, U> {
         self.inner
     }
 }
@@ -125,15 +151,15 @@ impl<T> DerefMut for Owned<'_, T> {
     }
 }
 
-pub trait OwnedEraseable: Sized {
-    unsafe fn steal<'a>() -> Owned<'a, Self>;
+pub trait OwnedEraseable<'a>: Sized {
+    unsafe fn magick() -> Owned<'a, Self>;
 }
 
-impl<T> OwnedEraseable for Peri<'_, T>
+impl<'a, T: 'a> OwnedEraseable<'a> for Peri<'a, T>
 where
     T: Stealable,
 {
-    unsafe fn steal<'a>() -> Owned<'a, Self> {
+    unsafe fn magick() -> Owned<'a, Self> {
         Owned::new(unsafe { T::steal() })
     }
 }
@@ -144,7 +170,7 @@ pub struct DynThief<'a, O> {
 }
 
 impl<'a, O> DynThief<'a, O> {
-    pub const fn new<I: OwnedEraseable + 'a>(_i: &'a mut I) -> Self
+    pub const fn new<I: OwnedEraseable<'a>>(_i: &'a mut I) -> Self
     where
         Owned<'a, I>: Into<O>,
     {
@@ -152,13 +178,13 @@ impl<'a, O> DynThief<'a, O> {
         unsafe { Self::new_unsafe() }
     }
 
-    pub const unsafe fn new_unsafe<I: OwnedEraseable + 'a>() -> Self
+    pub const unsafe fn new_unsafe<I: OwnedEraseable<'a>>() -> Self
     where
         Owned<'a, I>: Into<O>,
     {
         Self {
             _lifetime: PhantomData,
-            f: || Into::into(unsafe { I::steal() }),
+            f: || Into::into(unsafe { I::magick() }),
         }
     }
 
@@ -169,7 +195,7 @@ impl<'a, O> DynThief<'a, O> {
         }
     }
 
-    pub fn build(&mut self) -> Owned<'a, O> {
+    pub fn build(self) -> Owned<'a, O> {
         Owned {
             inner: (self.f)(),
             _lifetime: PhantomData,
@@ -183,7 +209,7 @@ pub struct DynEither<'a, T, U> {
 }
 
 impl<'a, T, U> DynEither<'a, T, U> {
-    pub fn new<I: OwnedEraseable + 'a>(_i: &'a mut I) -> Self
+    pub fn new<I: OwnedEraseable<'a>>(_i: &'a mut I) -> Self
     where
         Owned<'a, I>: Into<T> + Into<U>,
     {
@@ -202,12 +228,12 @@ impl<'a, T, U> DynEither<'a, T, U> {
         }
     }
 
-    pub fn build_left(&mut self) -> Owned<'_, T> {
-        self.left.build()
+    pub fn left(self) -> DynThief<'a, T> {
+        self.left
     }
 
-    pub fn build_right(&mut self) -> Owned<'_, U> {
-        self.right.build()
+    pub fn right(self) -> DynThief<'a, U> {
+        self.right
     }
 }
 
@@ -220,6 +246,21 @@ impl<'a> Into<Input<'a>> for Owned<'a, Input<'a>> {
 impl<'a> Into<Output<'a>> for Owned<'a, Output<'a>> {
     fn into(self) -> Output<'a> {
         self.inner
+    }
+}
+
+impl<'a> Into<Uart<'a>> for Owned<'a, Uart<'a>> {
+    fn into(self) -> Uart<'a> {
+        self.inner
+    }
+}
+
+impl<'a, RX: 'a, TX: 'a> Into<Pins<RX, TX>> for Owned<'a, Pins<RX, TX>> {
+    fn into(self) -> Pins<RX, TX> {
+        Pins {
+            rx: self.inner.rx,
+            tx: self.inner.tx,
+        }
     }
 }
 

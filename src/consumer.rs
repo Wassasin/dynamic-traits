@@ -4,7 +4,7 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_io_async::{Read, Write};
 
 use crate::{
-    dynamic::{Owned, OwnedEraseable},
+    dynamic::{Owned, Reborrowable},
     traits::{AsInput, AsIoReadWriteDevice, AsOutput},
 };
 
@@ -15,13 +15,22 @@ pub struct Pins<RX, TX> {
 }
 
 pub trait AsPinsMut: Sized {
-    fn as_pins_mut(
-        value: Owned<'_, Self>,
-    ) -> Pins<Owned<impl AsOutput + AsInput>, Owned<impl AsOutput + AsInput>>;
+    type RX<'a>: AsOutput<'a> + AsInput<'a>
+    where
+        Self: 'a;
+    type TX<'a>: AsOutput<'a> + AsInput<'a>
+    where
+        Self: 'a;
+
+    fn as_pins_mut<'a>(
+        value: Owned<'a, Self>,
+    ) -> Pins<Owned<'a, Self::RX<'a>>, Owned<'a, Self::TX<'a>>>
+    where
+        Self: 'a;
 }
 
 /// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency: AsPinsMut + for<'a> AsIoReadWriteDevice<'a> + OwnedEraseable {}
+pub trait Dependency: AsPinsMut + for<'a> AsIoReadWriteDevice + Reborrowable {}
 
 enum FeatureState {
     PowerOn,
@@ -48,12 +57,10 @@ pub async fn run(mut dependencies: Owned<'_, impl Dependency>) -> ! {
 
     let mut state = FeatureState::PowerOn;
 
-    let mut dependencies = dependencies.reborrow();
-
     loop {
         match state {
             FeatureState::PowerOn => {
-                let pins = AsPinsMut::as_pins_mut(dependencies.reborrow());
+                let pins = AsPinsMut::as_pins_mut(Reborrowable::reborrow(&mut dependencies));
 
                 // Weird chip on the other side needs the bus "de-gaussed"
                 let mut rx_pin = AsOutput::as_output(pins.rx);
@@ -63,12 +70,11 @@ pub async fn run(mut dependencies: Owned<'_, impl Dependency>) -> ! {
                 tx_pin.set_high().unwrap();
 
                 state = FeatureState::FullBus;
-
-                drop(rx_pin);
-                drop(tx_pin);
             }
             FeatureState::FullBus => {
-                let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(dependencies.reborrow());
+                let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(Reborrowable::reborrow(
+                    &mut dependencies,
+                ));
 
                 uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
 
@@ -85,7 +91,7 @@ pub async fn run(mut dependencies: Owned<'_, impl Dependency>) -> ! {
                 }
             }
             FeatureState::BitBanging => {
-                let pins = AsPinsMut::as_pins_mut(dependencies.reborrow());
+                let pins = AsPinsMut::as_pins_mut(Reborrowable::reborrow(&mut dependencies));
 
                 let mut rx_pin = AsInput::as_input(pins.rx);
                 let mut tx_pin = AsOutput::as_output(pins.tx);
