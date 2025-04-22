@@ -1,7 +1,7 @@
 use std::{convert::Infallible, marker::PhantomData, ops::DerefMut};
 
 use dynamic_traits::{
-    consumer::{self, AsPinsMut, Dependency, Pins},
+    consumer::{self, AsPinsMut, AsUartMut, Dependency, Pins},
     dynamic::{DynEither, DynThief, Owned, OwnedEraseable, Reborrowable},
     hal::{
         Peri, Peripherals,
@@ -232,6 +232,20 @@ impl AsPinsMut for DynBoard<'_> {
     }
 }
 
+impl AsUartMut for DynBoard<'_> {
+    type Target<'a>
+        = Uart<'a>
+    where
+        Self: 'a;
+
+    fn as_uart_mut<'a>(value: Owned<'a, Self>) -> Owned<'a, Self::Target<'a>>
+    where
+        Self: 'a,
+    {
+        todo!()
+    }
+}
+
 impl AsIoReadWriteDevice for DynBoard<'_> {
     type Target<'a>
         = Uart<'a>
@@ -251,10 +265,14 @@ impl AsIoReadWriteDevice for DynBoard<'_> {
 }
 
 impl Reborrowable for DynBoard<'_> {
-    type Target = DynEither<'_, Pins<DynPin<'_>, DynPin<'_>>, Uart<'_>>;
-    fn reborrow<'a, 'b: 'a>(value: &'a mut Owned<'b, Self>) -> Owned<'a, Self::Target> {
+    type Target<'a> = DynBoard<'a>;
+
+    fn reborrow<'a>(value: &'a mut Owned<'_, Self>) -> Owned<'a, Self::Target<'a>>
+    where
+        Self: 'a,
+    {
         let inner = value.inner.reborrow();
-        Owned::new(inner)
+        Owned::new(DynBoard { inner })
     }
 }
 

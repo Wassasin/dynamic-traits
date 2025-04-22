@@ -1,4 +1,5 @@
 //! A driver library that does not know what hardware it is running on.
+
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_io_async::{Read, Write};
@@ -29,8 +30,18 @@ pub trait AsPinsMut: Sized {
         Self: 'a;
 }
 
+pub trait AsUartMut: Sized {
+    type Target<'a>: AsIoReadWriteDevice
+    where
+        Self: 'a;
+
+    fn as_uart_mut<'a>(value: Owned<'a, Self>) -> Owned<'a, Self::Target<'a>>
+    where
+        Self: 'a;
+}
+
 /// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency: AsPinsMut + AsIoReadWriteDevice {}
+pub trait Dependency: AsPinsMut + AsUartMut {}
 
 enum FeatureState {
     PowerOn,
@@ -52,7 +63,9 @@ async fn wait_for_something() {
 }
 
 /// Core logic implemented by this crate.
-pub async fn run<U: Dependency + Reborrowable>(mut dependencies: Owned<'_, U>) -> ! {
+pub async fn run<'a, 'b: 'a, T: Dependency, U: Reborrowable<Target<'a> = T> + 'b>(
+    mut dependencies: Owned<'_, U>,
+) -> ! {
     const MAGIC_SEQUENCE_TO_STARTUP: [u8; 4] = [0x01, 0x02, 0x03, 0xff];
 
     let mut state = FeatureState::PowerOn;
@@ -73,7 +86,8 @@ pub async fn run<U: Dependency + Reborrowable>(mut dependencies: Owned<'_, U>) -
                 state = FeatureState::FullBus;
             }
             FeatureState::FullBus => {
-                let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(dependencies);
+                let uart_bus = AsUartMut::as_uart_mut(dependencies);
+                let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(uart_bus);
 
                 uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
 

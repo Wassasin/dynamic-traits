@@ -104,16 +104,14 @@ impl<'a, T: 'a> Owned<'a, T> {
 }
 
 pub trait Reborrowable: Sized {
-    fn reborrow<'a, 'b: 'a>(value: &'b mut Owned<'b, Self>) -> Owned<'a, Self>
+    type Target<'a>
+    where
+        Self: 'a;
+
+    fn reborrow<'a, 'b: 'a>(value: &'b mut Owned<'_, Self>) -> Owned<'b, Self::Target<'a>>
     where
         Self: 'a;
 }
-
-// impl<'c, T: OwnedEraseable<'c>> Reborrowable for T {
-//     fn reborrow<'a, 'b: 'a>(_value: Owned<'a, Self>) -> Owned<'b, Self> {
-//         unsafe { T::magick() }
-//     }
-// }
 
 impl<'a, T: PeripheralType> Into<Owned<'a, Peri<'a, T>>> for Peri<'a, T> {
     fn into(self) -> Owned<'a, Peri<'a, T>> {
