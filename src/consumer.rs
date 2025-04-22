@@ -5,7 +5,7 @@ use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_io_async::{Read, Write};
 
 use crate::{
-    dynamic::{Owned, Reborrowable},
+    dynamic::Owned,
     traits::{AsInput, AsIoReadWriteDevice, AsOutput},
 };
 
@@ -23,19 +23,17 @@ pub trait AsPinsMut: Sized {
     where
         Self: 'a;
 
-    fn as_pins_mut<'a>(
-        value: Owned<'a, Self>,
-    ) -> Pins<Owned<'a, Self::RX<'a>>, Owned<'a, Self::TX<'a>>>
+    fn as_pins_mut<'a>(&mut self) -> Pins<Owned<'a, Self::RX<'a>>, Owned<'a, Self::TX<'a>>>
     where
         Self: 'a;
 }
 
 pub trait AsUartMut: Sized {
-    type Target<'a>: AsIoReadWriteDevice
+    type Target<'a>: AsIoReadWriteDevice<'a>
     where
         Self: 'a;
 
-    fn as_uart_mut<'a>(value: Owned<'a, Self>) -> Owned<'a, Self::Target<'a>>
+    fn as_uart_mut<'a>(&mut self) -> Owned<'a, Self::Target<'a>>
     where
         Self: 'a;
 }
@@ -63,18 +61,15 @@ async fn wait_for_something() {
 }
 
 /// Core logic implemented by this crate.
-pub async fn run<'a, 'b: 'a, T: Dependency, U: Reborrowable<Target<'a> = T> + 'b>(
-    mut dependencies: Owned<'_, U>,
-) -> ! {
+pub async fn run(mut dependency: impl Dependency) -> ! {
     const MAGIC_SEQUENCE_TO_STARTUP: [u8; 4] = [0x01, 0x02, 0x03, 0xff];
 
     let mut state = FeatureState::PowerOn;
 
     loop {
-        let dependencies = Reborrowable::reborrow(&mut dependencies);
         match state {
             FeatureState::PowerOn => {
-                let pins = AsPinsMut::as_pins_mut(dependencies);
+                let pins = dependency.as_pins_mut();
 
                 // Weird chip on the other side needs the bus "de-gaussed"
                 let mut rx_pin = AsOutput::as_output(pins.rx);
@@ -86,7 +81,7 @@ pub async fn run<'a, 'b: 'a, T: Dependency, U: Reborrowable<Target<'a> = T> + 'b
                 state = FeatureState::FullBus;
             }
             FeatureState::FullBus => {
-                let uart_bus = AsUartMut::as_uart_mut(dependencies);
+                let uart_bus = dependency.as_uart_mut();
                 let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(uart_bus);
 
                 uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
@@ -104,7 +99,7 @@ pub async fn run<'a, 'b: 'a, T: Dependency, U: Reborrowable<Target<'a> = T> + 'b
                 }
             }
             FeatureState::BitBanging => {
-                let pins = AsPinsMut::as_pins_mut(dependencies);
+                let pins = AsPinsMut::as_pins_mut(&mut dependency);
 
                 let mut rx_pin = AsInput::as_input(pins.rx);
                 let mut tx_pin = AsOutput::as_output(pins.tx);

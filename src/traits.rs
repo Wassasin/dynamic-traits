@@ -15,9 +15,7 @@ pub trait AsOutput<'a>: Sized {
     fn as_output(value: Owned<'a, Self>) -> Self::Target;
 }
 
-pub trait AsIoReadWriteDevice: Sized {
-    type Target<'a>: Read + Write + 'a
-    where
-        Self: 'a;
-    fn as_io_read_write<'a, 'b: 'a>(value: Owned<'b, Self>) -> Self::Target<'a>;
+pub trait AsIoReadWriteDevice<'a>: Sized {
+    type Target: Read + Write + 'a;
+    fn as_io_read_write(value: Owned<'a, Self>) -> Self::Target;
 }
