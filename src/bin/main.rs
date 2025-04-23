@@ -1,20 +1,17 @@
-use std::{convert::Infallible, marker::PhantomData, ops::DerefMut};
-
 use dynamic_traits::{
     consumer::{self, AsPinsMut, AsUartMut, Dependency, Pins},
-    dynamic::{DynEither, DynThief, Owned, OwnedEraseable, Reborrowable},
+    dynamic::{DynEither, DynThief, Owned, OwnedEraseable},
     hal::{
         Peri, Peripherals,
-        gpio::{self, Input, Output},
+        gpio::{Input, Output},
         peripherals::{PIN_A, PIN_B, UART0},
         uart::Uart,
     },
     traits::{AsInput, AsIoReadWriteDevice, AsOutput},
 };
 use embassy_executor::Executor;
-use embassy_hal_internal::PeripheralType;
 use embassy_time::Timer;
-use embedded_hal::digital::{InputPin, OutputPin};
+use embedded_hal::digital::OutputPin;
 use static_cell::StaticCell;
 
 macro_rules! impl_board {
@@ -218,8 +215,8 @@ impl AsPinsMut for DynBoard<'_> {
         Self: 'a,
     {
         let value: DynEither<'_, _, _> = self.inner.reborrow();
-        let value: DynThief<'_, Pins<DynPin<'_>, _>> = value.left();
-        let value: Owned<'_, Pins<DynPin<'_>, DynPin<'_>>> = value.build();
+        let value: DynThief<'_, Pins<DynPin<'a>, _>> = value.left();
+        let value: Owned<'_, Pins<DynPin<'a>, DynPin<'a>>> = value.build();
         let value: Pins<DynPin<'a>, DynPin<'a>> = Into::into(value);
 
         Pins {
@@ -241,28 +238,28 @@ impl AsUartMut for DynBoard<'_> {
     where
         Self: 'a,
     {
-        // let uart = self.inner.reborrow().right();
-        // Owned::new(Test(uart))
-
         let value: DynEither<'_, _, _> = self.inner.reborrow();
-        let value: DynThief<'_, Uart<'_>> = value.right();
-        let value: Owned<'_, Uart<'_>> = value.build();
+        let value: DynThief<'_, Uart<'a>> = value.right();
+        let value: Owned<'_, Uart<'a>> = value.build();
         let value: Uart<'a> = Into::into(value);
 
         Owned::new(Test(value))
     }
 }
 
-impl<'a> AsIoReadWriteDevice<'a> for DynBoard<'a> {
+impl<'a> From<Test<'a>> for Uart<'a> {
+    fn from(value: Test<'a>) -> Self {
+        value.0
+    }
+}
+
+impl<'a> AsIoReadWriteDevice<'a> for Test<'a> {
     type Target = Uart<'a>;
     fn as_io_read_write(value: Owned<'a, Self>) -> Self::Target
     where
         Self: 'a,
     {
-        let value: Owned<'_, DynEither<'_, _, _>> = Owned::into(value);
-        let value: DynEither<'_, _, Uart<'_>> = Into::into(value);
-        let value: DynThief<'_, Uart<'_>> = value.right();
-        let value: Owned<'_, Uart<'_>> = value.build();
+        let value: Owned<'a, Uart<'a>> = value.into();
         Into::into(value)
     }
 }
