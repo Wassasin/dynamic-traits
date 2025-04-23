@@ -234,13 +234,13 @@ impl AsUartMut for DynBoard<'_> {
     where
         Self: 'a;
 
-    fn as_uart_mut<'a>(&mut self) -> Owned<'a, Self::Target<'a>>
+    fn as_uart_mut<'a, 'b: 'a>(&'b mut self) -> Owned<'a, Self::Target<'a>>
     where
         Self: 'a,
     {
-        let value: DynEither<'_, _, _> = self.inner.reborrow();
-        let value: DynThief<'_, Uart<'a>> = value.right();
-        let value: Owned<'_, Uart<'a>> = value.build();
+        let value: DynEither<'b, _, _> = self.inner.reborrow();
+        let value: DynThief<'b, Uart<'a>> = value.right();
+        let value: Owned<'b, Uart<'a>> = value.build();
         let value: Uart<'a> = Into::into(value);
 
         Owned::new(Test(value))

@@ -33,7 +33,7 @@ pub trait AsUartMut: Sized {
     where
         Self: 'a;
 
-    fn as_uart_mut<'a>(&mut self) -> Owned<'a, Self::Target<'a>>
+    fn as_uart_mut<'a, 'b: 'a>(&'b mut self) -> Owned<'a, Self::Target<'a>>
     where
         Self: 'a;
 }

@@ -14,7 +14,7 @@ pub trait TxPin<T: Instance>: PeripheralType {}
 pub trait RxPin<T: Instance>: PeripheralType {}
 
 pub struct Uart<'a> {
-    _lifetime: PhantomData<&'a ()>,
+    _lifetime: PhantomData<&'a mut ()>,
 }
 
 impl<'a> Uart<'a> {
