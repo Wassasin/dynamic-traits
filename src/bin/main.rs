@@ -65,75 +65,12 @@ macro_rules! impl_board {
                 }
             }
         }
-
-        // impl<'a> AsPinsMut for $board<'a> {
-        //     type RX<'b>
-        //         = Peri<'b, dynamic_traits::hal::peripherals::$pin_rx>
-        //     where
-        //         Self: 'b;
-        //     type TX<'b>
-        //         = Peri<'b, dynamic_traits::hal::peripherals::$pin_tx>
-        //     where
-        //         Self: 'b;
-
-        //     fn as_pins_mut(&mut self) -> consumer::Pins<Self::RX<'_>, Self::TX<'_>> {
-        //         consumer::Pins {
-        //             rx: self.pins.rx.reborrow(),
-        //             tx: self.pins.tx.reborrow(),
-        //         }
-        //     }
-        // }
-
-        // impl<'a> From<$board<'a>> for DynBoard<'a> {
-        //     fn from(value: $board<'a>) -> Self {
-        //         Self {
-        //             pins: Pins {
-        //                 rx: DynPin::from(value.pins.rx),
-        //                 tx: DynPin::from(value.pins.tx),
-        //             },
-        //             uart: DynBoard::new(value),
-        //         }
-        //     }
-        // }
-
-        // impl AsIoReadWriteDevice for $board<'_> {
-        //     type Target<'a>
-        //         = Uart<'a>
-        //     where
-        //         Self: 'a;
-
-        //     fn as_io_read_write(&mut self) -> Self::Target<'_> {
-        //         Uart::new(
-        //             self.uart.reborrow(),
-        //             self.pins.rx.reborrow(),
-        //             self.pins.tx.reborrow(),
-        //         )
-        //     }
-        // }
-
-        // impl Dependency for $board<'_> {}
     };
 }
 
 impl_board!(BoardA, PIN_A, PIN_B, UART0);
 impl_board!(BoardB, PIN_B, PIN_C, UART1);
 impl_board!(BoardC, PIN_C, PIN_D, UART2);
-
-// impl<'a> From<Owned<'a, BoardA<'a>>> for DynBoard<'a> {
-//     fn from(mut value: Owned<'a, BoardA<'a>>) -> Self {
-//         let value: Owned<'_, DynBoard<'_>> = value.into();
-//         Self {
-//             inner: DynEither::new(value),
-//         }
-//         // Self {
-//         //     pins: Pins {
-//         //         rx: DynPin::from(value.pins.rx),
-//         //         tx: DynPin::from(value.pins.tx),
-//         //     },
-//         //     uart: DynBoard::new(value),
-//         // }
-//     }
-// }
 
 struct InputConstructor;
 
@@ -161,25 +98,10 @@ impl<'a> DynPin<'a> {
     }
 }
 
+/// How to construct Uart device from a Board.
 struct UartConstructor;
 
-// impl<'a> Constructor<'a, BoardA<'a>> for UartConstructor {
-//     type To = Uart<'a>;
-
-//     fn convert(from: Owned<'a, BoardA<'a>>) -> Owned<'a, Self::To> {
-//         from.map(|from| Uart::new(from.uart, from.pins.rx, from.pins.tx))
-//     }
-// }
-
-// impl<'a> Into<Pins<DynPin<'a>, DynPin<'a>>> for &'a mut BoardA<'a> {
-//     fn into(self) -> Pins<DynPin<'a>, DynPin<'a>> {
-//         Pins {
-//             rx: DynPin::new(&mut self.pins.rx),
-//             tx: DynPin::new(&mut self.pins.tx),
-//         }
-//     }
-// }
-
+/// How to construct the discrete pin set from a Board.
 struct PinsConstructor;
 
 #[derive(Debug)]
@@ -225,12 +147,6 @@ struct DynPin<'a>(DynEither<'a, Input<'a>, Output<'a>>);
 impl<'a> Into<DynEither<'a, Input<'a>, Output<'a>>> for DynPin<'a> {
     fn into(self) -> DynEither<'a, Input<'a>, Output<'a>> {
         self.0
-    }
-}
-
-impl<'a> DynPin<'a> {
-    pub fn reborrow(&mut self) -> DynPin<'_> {
-        DynPin(self.0.reborrow())
     }
 }
 
