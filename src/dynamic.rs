@@ -101,6 +101,20 @@ impl<'a, T: 'a> Owned<'a, T> {
             _lifetime: PhantomData,
         }
     }
+
+    pub fn map<U>(self, f: impl FnOnce(T) -> U) -> Owned<'a, U> {
+        Owned {
+            inner: f(self.inner),
+            _lifetime: PhantomData,
+        }
+    }
+
+    pub fn map_mut<U>(&'a mut self, f: impl FnOnce(&'a mut T) -> U) -> Owned<'a, U> {
+        Owned {
+            inner: f(&mut self.inner),
+            _lifetime: PhantomData,
+        }
+    }
 }
 
 pub trait Reborrowable: Sized {
@@ -164,27 +178,34 @@ where
     }
 }
 
+pub trait Constructor<'a, FROM> {
+    type To;
+
+    fn convert(from: Owned<'a, FROM>) -> Owned<'a, Self::To>;
+}
+
 pub struct DynThief<'a, O> {
-    f: fn() -> O,
+    f: fn() -> Owned<'a, O>,
     _lifetime: PhantomData<&'a mut ()>,
 }
 
 impl<'a, O> DynThief<'a, O> {
-    pub const fn new<I: OwnedEraseable<'a>>(_i: &'a mut I) -> Self
-    where
-        Owned<'a, I>: Into<O>,
-    {
+    pub const fn new<I: OwnedEraseable<'a>, C: Constructor<'a, I, To = O>>(_i: &'a mut I) -> Self {
         // Unsafe: we bind the lifetime by the argument
-        unsafe { Self::new_unsafe() }
+        unsafe { Self::new_unsafe::<I, C>() }
     }
 
-    pub const unsafe fn new_unsafe<I: OwnedEraseable<'a>>() -> Self
-    where
-        Owned<'a, I>: Into<O>,
-    {
+    pub fn new_owned<I: OwnedEraseable<'a>, C: Constructor<'a, I, To = O>>(
+        _i: Owned<'a, I>,
+    ) -> Self {
+        // Unsafe: we bind the lifetime by the argument
+        unsafe { Self::new_unsafe::<I, C>() }
+    }
+
+    pub const unsafe fn new_unsafe<I: OwnedEraseable<'a>, C: Constructor<'a, I, To = O>>() -> Self {
         Self {
             _lifetime: PhantomData,
-            f: || Into::into(unsafe { I::magick() }),
+            f: || C::convert(unsafe { I::magick() }),
         }
     }
 
@@ -196,10 +217,7 @@ impl<'a, O> DynThief<'a, O> {
     }
 
     pub fn build(self) -> Owned<'a, O> {
-        Owned {
-            inner: (self.f)(),
-            _lifetime: PhantomData,
-        }
+        (self.f)()
     }
 }
 
@@ -209,15 +227,33 @@ pub struct DynEither<'a, T, U> {
 }
 
 impl<'a, T, U> DynEither<'a, T, U> {
-    pub fn new<I: OwnedEraseable<'a>>(_i: &'a mut I) -> Self
-    where
-        Owned<'a, I>: Into<T> + Into<U>,
-    {
+    pub fn new<
+        I: OwnedEraseable<'a>,
+        C: Constructor<'a, I, To = T>,
+        D: Constructor<'a, I, To = U>,
+    >(
+        _i: &'a mut I,
+    ) -> Self {
         // Unsafe: we ensure that the lifetime of left and right do not conflict.
         // We bind the lifetime with the argument.
         Self {
-            left: unsafe { DynThief::new_unsafe() },
-            right: unsafe { DynThief::new_unsafe() },
+            left: unsafe { DynThief::new_unsafe::<I, C>() },
+            right: unsafe { DynThief::new_unsafe::<I, D>() },
+        }
+    }
+
+    pub fn new_owned<
+        I: OwnedEraseable<'a>,
+        C: Constructor<'a, I, To = T>,
+        D: Constructor<'a, I, To = U>,
+    >(
+        _i: Owned<'a, I>,
+    ) -> Self {
+        // Unsafe: we ensure that the lifetime of left and right do not conflict.
+        // We bind the lifetime with the argument.
+        Self {
+            left: unsafe { DynThief::new_unsafe::<I, C>() },
+            right: unsafe { DynThief::new_unsafe::<I, D>() },
         }
     }
 

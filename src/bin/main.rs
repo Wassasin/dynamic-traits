@@ -1,9 +1,9 @@
 use dynamic_traits::{
     consumer::{self, AsPinsMut, AsUartMut, Dependency, Pins},
-    dynamic::{DynEither, DynThief, Owned, OwnedEraseable},
+    dynamic::{Constructor, DynEither, DynThief, Owned, OwnedEraseable},
     hal::{
         Peri, Peripherals,
-        gpio::{Input, Output},
+        gpio::{self, Input, Output},
         peripherals::{PIN_A, PIN_B, UART0},
         uart::Uart,
     },
@@ -107,48 +107,119 @@ impl<'a> OwnedEraseable<'a> for BoardA<'a> {
 //     }
 // }
 
-impl<'a> Into<Pins<DynPin<'a>, DynPin<'a>>> for &'a mut BoardA<'a> {
-    fn into(self) -> Pins<DynPin<'a>, DynPin<'a>> {
-        todo!()
+struct InputConstructor;
+
+impl<'a, T: gpio::Instance> Constructor<'a, Peri<'a, T>> for InputConstructor {
+    type To = Input<'a>;
+
+    fn convert(from: Owned<'a, Peri<'a, T>>) -> Owned<'a, Self::To> {
+        from.map(|from| Input::new(from))
+    }
+}
+
+struct OutputConstructor;
+
+impl<'a, T: gpio::Instance> Constructor<'a, Peri<'a, T>> for OutputConstructor {
+    type To = Output<'a>;
+
+    fn convert(from: Owned<'a, Peri<'a, T>>) -> Owned<'a, Self::To> {
+        from.map(|from| Output::new(from))
+    }
+}
+
+impl<'a> DynPin<'a> {
+    // pub fn new(pin: &'a mut Peri<'a, impl gpio::Instance>) -> Self {
+    //     Self(DynEither::new::<_, InputConstructor, OutputConstructor>(
+    //         pin,
+    //     ))
+    // }
+
+    pub fn new(pin: Peri<'a, impl gpio::Instance>) -> Self {
+        Self(DynEither::new_owned::<_, InputConstructor, OutputConstructor>(Owned::new(pin)))
+    }
+}
+
+struct UartConstructor;
+
+impl<'a> Constructor<'a, BoardA<'a>> for UartConstructor {
+    type To = Uart<'a>;
+
+    fn convert(from: Owned<'a, BoardA<'a>>) -> Owned<'a, Self::To> {
+        from.map(|from| Uart::new(from.uart, from.pins.rx, from.pins.tx))
+    }
+}
+
+// impl<'a> Into<Pins<DynPin<'a>, DynPin<'a>>> for &'a mut BoardA<'a> {
+//     fn into(self) -> Pins<DynPin<'a>, DynPin<'a>> {
+//         Pins {
+//             rx: DynPin::new(&mut self.pins.rx),
+//             tx: DynPin::new(&mut self.pins.tx),
+//         }
+//     }
+// }
+
+impl<'a> Into<DynThief<'a, Uart<'a>>> for &'a mut BoardA<'a> {
+    fn into(self) -> DynThief<'a, Uart<'a>> {
+        DynThief::new::<_, UartConstructor>(self)
+    }
+}
+
+struct PinsConstructor;
+
+impl<'a> Constructor<'a, BoardA<'a>> for PinsConstructor {
+    type To = Pins<DynPin<'a>, DynPin<'a>>;
+
+    fn convert(from: Owned<'a, BoardA<'a>>) -> Owned<'a, Self::To> {
+        from.map(|from| Pins {
+            rx: DynPin::new(from.pins.rx),
+            tx: DynPin::new(from.pins.tx),
+        })
+    }
+}
+
+impl<'a> Into<DynBoard<'a>> for BoardA<'a> {
+    fn into(self) -> DynBoard<'a> {
+        DynBoard {
+            inner: DynEither::new_owned::<_, PinsConstructor, UartConstructor>(Owned::new(self)),
+        }
     }
 }
 
 #[derive(Debug)]
 enum Boards {
     A,
-    B,
-    C,
+    // B,
+    // C,
 }
 
 impl<'a> DynBoard<'a> {
     pub fn select(p: &'a mut Peripherals, board: Boards) -> Self {
-        // match board {
-        //     Boards::A => BoardA {
-        //         pins: Pins {
-        //             rx: p.PIN_A.reborrow(),
-        //             tx: p.PIN_B.reborrow(),
-        //         },
-        //         uart: p.UART0.reborrow(),
-        //     }
-        //     .into(),
-        //     Boards::B => BoardB {
-        //         pins: Pins {
-        //             rx: p.PIN_B.reborrow(),
-        //             tx: p.PIN_C.reborrow(),
-        //         },
-        //         uart: p.UART1.reborrow(),
-        //     }
-        //     .into(),
-        //     Boards::C => BoardC {
-        //         pins: Pins {
-        //             rx: p.PIN_C.reborrow(),
-        //             tx: p.PIN_D.reborrow(),
-        //         },
-        //         uart: p.UART2.reborrow(),
-        //     }
-        //     .into(),
-        // }
-        todo!()
+        match board {
+            Boards::A => BoardA {
+                pins: Pins {
+                    rx: p.PIN_A.reborrow(),
+                    tx: p.PIN_B.reborrow(),
+                },
+                uart: p.UART0.reborrow(),
+            }
+            .into(),
+            //     Boards::B => BoardB {
+            //         pins: Pins {
+            //             rx: p.PIN_B.reborrow(),
+            //             tx: p.PIN_C.reborrow(),
+            //         },
+            //         uart: p.UART1.reborrow(),
+            //     }
+            //     .into(),
+            //     Boards::C => BoardC {
+            //         pins: Pins {
+            //             rx: p.PIN_C.reborrow(),
+            //             tx: p.PIN_D.reborrow(),
+            //         },
+            //         uart: p.UART2.reborrow(),
+            //     }
+            //     .into(),
+        }
     }
 }
 
@@ -277,7 +348,7 @@ async fn run() {
     }
 
     loop {
-        for board in [Boards::A, Boards::B, Boards::C] {
+        for board in [Boards::A /*Boards::B, Boards::C*/] {
             log::info!("Board {:?}", board);
 
             let board = DynBoard::select(&mut p, board);
