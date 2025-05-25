@@ -210,15 +210,15 @@ impl AsPinsMut for DynBoard<'_> {
     }
 }
 
-struct Test<'a>(Uart<'a>);
+struct UartPrecursor<'a>(Uart<'a>);
 
 impl AsUartMut for DynBoard<'_> {
     type Target<'a>
-        = Test<'a>
+        = UartPrecursor<'a>
     where
         Self: 'a;
 
-    fn as_uart_mut<'a, 'b: 'a>(&'b mut self) -> Owned<'a, Self::Target<'a>>
+    fn as_uart_mut<'a, 'b: 'a>(&'b mut self) -> Self::Target<'a>
     where
         Self: 'a,
     {
@@ -227,24 +227,23 @@ impl AsUartMut for DynBoard<'_> {
         let value: Owned<'b, Uart<'a>> = value.build();
         let value: Uart<'a> = Into::into(value);
 
-        Owned::new(Test(value))
+        UartPrecursor(value)
     }
 }
 
-impl<'a> From<Test<'a>> for Uart<'a> {
-    fn from(value: Test<'a>) -> Self {
+impl<'a> From<UartPrecursor<'a>> for Uart<'a> {
+    fn from(value: UartPrecursor<'a>) -> Self {
         value.0
     }
 }
 
-impl<'a> AsIoReadWriteDevice<'a> for Test<'a> {
+impl<'a> AsIoReadWriteDevice<'a> for UartPrecursor<'a> {
     type Target = Uart<'a>;
-    fn as_io_read_write(value: Owned<'a, Self>) -> Self::Target
+    fn as_io_read_write(self) -> Self::Target
     where
         Self: 'a,
     {
-        let value: Owned<'a, Uart<'a>> = value.into();
-        Into::into(value)
+        Into::into(self)
     }
 }
 

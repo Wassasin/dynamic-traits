@@ -17,5 +17,5 @@ pub trait AsOutput<'a>: Sized {
 
 pub trait AsIoReadWriteDevice<'a>: Sized {
     type Target: Read + Write + 'a;
-    fn as_io_read_write(value: Owned<'a, Self>) -> Self::Target;
+    fn as_io_read_write(self) -> Self::Target;
 }
