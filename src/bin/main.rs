@@ -153,10 +153,8 @@ impl<'a> Into<DynEither<'a, Input<'a>, Output<'a>>> for DynPin<'a> {
 impl<'a> AsInput<'a> for DynPin<'a> {
     type Target = Input<'a>;
 
-    fn as_input(value: Owned<'a, Self>) -> Self::Target {
-        let value: Owned<'a, DynEither<'a, Input<'a>, Output<'a>>> = Owned::into(value);
-        let value: DynEither<'a, Input<'a>, Output<'a>> = Into::into(value);
-        let value: DynThief<'a, Input<'a>> = value.left();
+    fn as_input(self) -> Self::Target {
+        let value: DynThief<'a, Input<'a>> = self.0.left();
         let value: Owned<'a, Input<'a>> = value.build();
         Into::into(value)
     }
@@ -165,10 +163,8 @@ impl<'a> AsInput<'a> for DynPin<'a> {
 impl<'a> AsOutput<'a> for DynPin<'a> {
     type Target = Output<'a>;
 
-    fn as_output(value: Owned<'a, Self>) -> Self::Target {
-        let value: Owned<'a, DynEither<'a, Input<'a>, Output<'a>>> = Owned::into(value);
-        let value: DynEither<'a, Input<'a>, Output<'a>> = Into::into(value);
-        let value: DynThief<'_, Output<'a>> = value.right();
+    fn as_output(self) -> Self::Target {
+        let value: DynThief<'_, Output<'a>> = self.0.right();
         let value: Owned<'_, Output<'_>> = value.build();
         Into::into(value)
     }
@@ -194,7 +190,7 @@ impl AsPinsMut for DynBoard<'_> {
     where
         Self: 'a;
 
-    fn as_pins_mut<'a>(&mut self) -> Pins<Owned<'a, Self::RX<'a>>, Owned<'a, Self::TX<'a>>>
+    fn as_pins_mut<'a>(&mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
     where
         Self: 'a,
     {
@@ -203,10 +199,7 @@ impl AsPinsMut for DynBoard<'_> {
         let value: Owned<'_, Pins<DynPin<'a>, DynPin<'a>>> = value.build();
         let value: Pins<DynPin<'a>, DynPin<'a>> = Into::into(value);
 
-        Pins {
-            rx: Owned::new(value.rx),
-            tx: Owned::new(value.tx),
-        }
+        value
     }
 }
 

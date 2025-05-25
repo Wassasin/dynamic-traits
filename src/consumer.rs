@@ -4,10 +4,7 @@ use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_io_async::{Read, Write};
 
-use crate::{
-    dynamic::Owned,
-    traits::{AsInput, AsIoReadWriteDevice, AsOutput},
-};
+use crate::traits::{AsInput, AsIoReadWriteDevice, AsOutput};
 
 /// Specific arrangement of pins as expected by this crate.
 pub struct Pins<RX, TX> {
@@ -23,7 +20,7 @@ pub trait AsPinsMut: Sized {
     where
         Self: 'a;
 
-    fn as_pins_mut<'a>(&mut self) -> Pins<Owned<'a, Self::RX<'a>>, Owned<'a, Self::TX<'a>>>
+    fn as_pins_mut<'a>(&mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
     where
         Self: 'a;
 }
