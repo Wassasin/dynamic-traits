@@ -12,31 +12,33 @@ pub struct Pins<RX, TX> {
     pub tx: TX,
 }
 
-pub trait AsPinsMut: Sized {
-    type RX<'a>: AsOutput<'a> + AsInput<'a>
-    where
-        Self: 'a;
-    type TX<'a>: AsOutput<'a> + AsInput<'a>
-    where
-        Self: 'a;
-
-    fn as_pins_mut<'a, 'b: 'a>(&'b mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
-    where
-        Self: 'a;
+pub trait AsPinsMut {
+    type RX: AsOutput + AsInput;
+    type TX: AsOutput + AsInput;
+    fn as_pins(self) -> Pins<Self::RX, Self::TX>;
 }
 
-pub trait AsUartMut: Sized {
-    type Target<'a>: AsIoReadWriteDevice<'a>
-    where
-        Self: 'a;
-
-    fn as_uart_mut<'a, 'b: 'a>(&'b mut self) -> Self::Target<'a>
-    where
-        Self: 'a;
+pub trait AsUartMut {
+    type Target: AsIoReadWriteDevice;
+    fn as_uart(self) -> Self::Target;
 }
 
-/// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency: AsPinsMut + AsUartMut {}
+pub trait Dependency {
+    type Target<'a>: AsPinsMut + AsUartMut
+    where
+        Self: 'a;
+
+    fn reborrow<'a, 'b: 'a>(&'b mut self) -> Self::Target<'a>
+    where
+        Self: 'b;
+}
+
+// /// BSP crates should implement this trait if they want to use this library.
+// pub trait Dependency: Reborrowable
+// where
+//     for<'a> <Self as Reborrowable>::Target<'a>: AsPinsMut + AsUartMut + 'a,
+// {
+// }
 
 enum FeatureState {
     PowerOn,
@@ -58,15 +60,17 @@ async fn wait_for_something() {
 }
 
 /// Core logic implemented by this crate.
-pub async fn run(mut dependency: &mut impl Dependency) -> ! {
+pub async fn run(mut dependency: impl Dependency) -> ! {
     const MAGIC_SEQUENCE_TO_STARTUP: [u8; 4] = [0x01, 0x02, 0x03, 0xff];
 
     let mut state = FeatureState::PowerOn;
 
     loop {
+        let dependency = dependency.reborrow();
+
         match state {
             FeatureState::PowerOn => {
-                let pins = dependency.as_pins_mut();
+                let pins = dependency.as_pins();
 
                 // Weird chip on the other side needs the bus "de-gaussed"
                 let mut rx_pin = AsOutput::as_output(pins.rx);
@@ -78,7 +82,7 @@ pub async fn run(mut dependency: &mut impl Dependency) -> ! {
                 state = FeatureState::FullBus;
             }
             FeatureState::FullBus => {
-                let uart_bus = dependency.as_uart_mut();
+                let uart_bus = dependency.as_uart();
                 let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(uart_bus);
 
                 uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
@@ -96,7 +100,7 @@ pub async fn run(mut dependency: &mut impl Dependency) -> ! {
                 }
             }
             FeatureState::BitBanging => {
-                let pins = AsPinsMut::as_pins_mut(dependency);
+                let pins = AsPinsMut::as_pins(dependency);
 
                 let mut rx_pin = AsInput::as_input(pins.rx);
                 let mut tx_pin = AsOutput::as_output(pins.tx);

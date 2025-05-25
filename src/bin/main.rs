@@ -84,7 +84,7 @@ impl BoardA<'_> {
     }
 }
 
-impl<'a> AsIoReadWriteDevice<'a> for BoardA<'a> {
+impl<'a> AsIoReadWriteDevice for BoardA<'a> {
     type Target = Uart<'a>;
 
     fn as_io_read_write(self) -> Self::Target {
@@ -92,43 +92,45 @@ impl<'a> AsIoReadWriteDevice<'a> for BoardA<'a> {
     }
 }
 
-impl AsUartMut for BoardA<'_> {
+impl<'a> AsUartMut for BoardA<'a> {
+    type Target = BoardA<'a>;
+
+    fn as_uart(self) -> Self::Target {
+        self
+    }
+}
+
+impl<'a> AsPinsMut for BoardA<'a> {
+    type RX = DynPin<'a>;
+    type TX = DynPin<'a>;
+
+    fn as_pins(self) -> Pins<Self::RX, Self::TX> {
+        Pins {
+            rx: DynPin::new(self.pins.rx),
+            tx: DynPin::new(self.pins.tx),
+        }
+    }
+}
+
+impl Dependency for BoardA<'_> {
     type Target<'a>
         = BoardA<'a>
     where
         Self: 'a;
 
-    fn as_uart_mut<'a, 'b: 'a>(&'b mut self) -> Self::Target<'a>
+    fn reborrow<'a, 'b: 'a>(&'b mut self) -> Self::Target<'a>
     where
-        Self: 'a,
+        Self: 'b,
     {
-        self.reborrow()
-    }
-}
-
-impl AsPinsMut for BoardA<'_> {
-    type RX<'a>
-        = DynPin<'a>
-    where
-        Self: 'a;
-
-    type TX<'a>
-        = DynPin<'a>
-    where
-        Self: 'a;
-
-    fn as_pins_mut<'a, 'b: 'a>(&'b mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
-    where
-        Self: 'a,
-    {
-        Pins {
-            rx: DynPin::new(self.pins.rx.reborrow()),
-            tx: DynPin::new(self.pins.tx.reborrow()),
+        BoardA {
+            pins: Pins {
+                rx: self.pins.rx.reborrow(),
+                tx: self.pins.tx.reborrow(),
+            },
+            uart: self.uart.reborrow(),
         }
     }
 }
-
-impl Dependency for BoardA<'_> {}
 
 struct InputConstructor;
 
@@ -208,7 +210,7 @@ impl<'a> Into<DynEither<'a, Input<'a>, Output<'a>>> for DynPin<'a> {
     }
 }
 
-impl<'a> AsInput<'a> for DynPin<'a> {
+impl<'a> AsInput for DynPin<'a> {
     type Target = Input<'a>;
 
     fn as_input(self) -> Self::Target {
@@ -218,7 +220,7 @@ impl<'a> AsInput<'a> for DynPin<'a> {
     }
 }
 
-impl<'a> AsOutput<'a> for DynPin<'a> {
+impl<'a> AsOutput for DynPin<'a> {
     type Target = Output<'a>;
 
     fn as_output(self) -> Self::Target {
@@ -238,23 +240,16 @@ impl<'a> Into<DynEither<'a, Pins<DynPin<'a>, DynPin<'a>>, Uart<'a>>> for DynBoar
     }
 }
 
-impl AsPinsMut for DynBoard<'_> {
-    type RX<'a>
-        = DynPin<'a>
-    where
-        Self: 'a;
-    type TX<'a>
-        = DynPin<'a>
-    where
-        Self: 'a;
+impl<'a> AsPinsMut for DynBoard<'a> {
+    type RX = DynPin<'a>;
+    type TX = DynPin<'a>;
 
-    fn as_pins_mut<'a, 'b: 'a>(&'b mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
+    fn as_pins(self) -> Pins<Self::RX, Self::TX>
     where
         Self: 'a,
     {
-        let value: DynEither<'b, _, _> = self.inner.reborrow();
-        let value: DynThief<'b, Pins<DynPin<'a>, _>> = value.left();
-        let value: Owned<'b, Pins<DynPin<'a>, DynPin<'a>>> = value.build();
+        let value: DynThief<'a, Pins<DynPin<'a>, _>> = self.inner.left();
+        let value: Owned<'a, Pins<DynPin<'a>, DynPin<'a>>> = value.build();
         let value: Pins<DynPin<'a>, DynPin<'a>> = Into::into(value);
 
         value
@@ -263,19 +258,18 @@ impl AsPinsMut for DynBoard<'_> {
 
 struct UartPrecursor<'a>(Uart<'a>);
 
-impl AsUartMut for DynBoard<'_> {
-    type Target<'a>
+impl<'a> AsUartMut for DynBoard<'a> {
+    type Target
         = UartPrecursor<'a>
     where
         Self: 'a;
 
-    fn as_uart_mut<'a, 'b: 'a>(&'b mut self) -> Self::Target<'a>
+    fn as_uart(self) -> Self::Target
     where
         Self: 'a,
     {
-        let value: DynEither<'b, _, _> = self.inner.reborrow();
-        let value: DynThief<'b, Uart<'a>> = value.right();
-        let value: Owned<'b, Uart<'a>> = value.build();
+        let value: DynThief<'a, Uart<'a>> = self.inner.right();
+        let value: Owned<'a, Uart<'a>> = value.build();
         let value: Uart<'a> = Into::into(value);
 
         UartPrecursor(value)
@@ -288,7 +282,7 @@ impl<'a> From<UartPrecursor<'a>> for Uart<'a> {
     }
 }
 
-impl<'a> AsIoReadWriteDevice<'a> for UartPrecursor<'a> {
+impl<'a> AsIoReadWriteDevice for UartPrecursor<'a> {
     type Target = Uart<'a>;
     fn as_io_read_write(self) -> Self::Target
     where
@@ -298,7 +292,7 @@ impl<'a> AsIoReadWriteDevice<'a> for UartPrecursor<'a> {
     }
 }
 
-impl Dependency for DynBoard<'_> {}
+// impl Dependency for DynBoard<'_> {}
 
 #[embassy_executor::task]
 async fn run() {
@@ -318,15 +312,13 @@ async fn run() {
         //     embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
         // }
 
-        let mut board = BoardA {
+        let board = BoardA {
             pins: Pins {
                 rx: p.PIN_A.reborrow(),
                 tx: p.PIN_B.reborrow(),
             },
             uart: p.UART0.reborrow(),
         };
-
-        let board = &mut board;
 
         embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
 
