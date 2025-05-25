@@ -58,7 +58,7 @@ async fn wait_for_something() {
 }
 
 /// Core logic implemented by this crate.
-pub async fn run(mut dependency: impl Dependency) -> ! {
+pub async fn run(mut dependency: &mut impl Dependency) -> ! {
     const MAGIC_SEQUENCE_TO_STARTUP: [u8; 4] = [0x01, 0x02, 0x03, 0xff];
 
     let mut state = FeatureState::PowerOn;
@@ -96,7 +96,7 @@ pub async fn run(mut dependency: impl Dependency) -> ! {
                 }
             }
             FeatureState::BitBanging => {
-                let pins = AsPinsMut::as_pins_mut(&mut dependency);
+                let pins = AsPinsMut::as_pins_mut(dependency);
 
                 let mut rx_pin = AsInput::as_input(pins.rx);
                 let mut tx_pin = AsOutput::as_output(pins.tx);

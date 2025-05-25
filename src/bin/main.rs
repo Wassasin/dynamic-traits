@@ -72,6 +72,64 @@ impl_board!(BoardA, PIN_A, PIN_B, UART0);
 impl_board!(BoardB, PIN_B, PIN_C, UART1);
 impl_board!(BoardC, PIN_C, PIN_D, UART2);
 
+impl BoardA<'_> {
+    pub fn reborrow(&mut self) -> BoardA<'_> {
+        BoardA {
+            pins: Pins {
+                rx: self.pins.rx.reborrow(),
+                tx: self.pins.tx.reborrow(),
+            },
+            uart: self.uart.reborrow(),
+        }
+    }
+}
+
+impl<'a> AsIoReadWriteDevice<'a> for BoardA<'a> {
+    type Target = Uart<'a>;
+
+    fn as_io_read_write(self) -> Self::Target {
+        Uart::new(self.uart, self.pins.rx, self.pins.tx)
+    }
+}
+
+impl AsUartMut for BoardA<'_> {
+    type Target<'a>
+        = BoardA<'a>
+    where
+        Self: 'a;
+
+    fn as_uart_mut<'a, 'b: 'a>(&'b mut self) -> Self::Target<'a>
+    where
+        Self: 'a,
+    {
+        self.reborrow()
+    }
+}
+
+impl AsPinsMut for BoardA<'_> {
+    type RX<'a>
+        = DynPin<'a>
+    where
+        Self: 'a;
+
+    type TX<'a>
+        = DynPin<'a>
+    where
+        Self: 'a;
+
+    fn as_pins_mut<'a, 'b: 'a>(&'b mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
+    where
+        Self: 'a,
+    {
+        Pins {
+            rx: DynPin::new(self.pins.rx.reborrow()),
+            tx: DynPin::new(self.pins.tx.reborrow()),
+        }
+    }
+}
+
+impl Dependency for BoardA<'_> {}
+
 struct InputConstructor;
 
 impl<'a, T: gpio::Instance> Constructor<'a, Peri<'a, T>> for InputConstructor {
@@ -253,12 +311,25 @@ async fn run() {
     }
 
     loop {
-        for board in [Boards::A, Boards::B, Boards::C] {
-            log::info!("Board {:?}", board);
+        // for board in [Boards::A, Boards::B, Boards::C] {
+        //     log::info!("Board {:?}", board);
 
-            let board = DynBoard::select(&mut p, board);
-            embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
-        }
+        //     let board = DynBoard::select(&mut p, board);
+        //     embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
+        // }
+
+        let mut board = BoardA {
+            pins: Pins {
+                rx: p.PIN_A.reborrow(),
+                tx: p.PIN_B.reborrow(),
+            },
+            uart: p.UART0.reborrow(),
+        };
+
+        let board = &mut board;
+
+        embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
+
         Timer::after_secs(1).await;
     }
 }
