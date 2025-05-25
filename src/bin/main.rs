@@ -190,13 +190,13 @@ impl AsPinsMut for DynBoard<'_> {
     where
         Self: 'a;
 
-    fn as_pins_mut<'a>(&mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
+    fn as_pins_mut<'a, 'b: 'a>(&'b mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
     where
         Self: 'a,
     {
-        let value: DynEither<'_, _, _> = self.inner.reborrow();
-        let value: DynThief<'_, Pins<DynPin<'a>, _>> = value.left();
-        let value: Owned<'_, Pins<DynPin<'a>, DynPin<'a>>> = value.build();
+        let value: DynEither<'b, _, _> = self.inner.reborrow();
+        let value: DynThief<'b, Pins<DynPin<'a>, _>> = value.left();
+        let value: Owned<'b, Pins<DynPin<'a>, DynPin<'a>>> = value.build();
         let value: Pins<DynPin<'a>, DynPin<'a>> = Into::into(value);
 
         value

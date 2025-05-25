@@ -20,7 +20,7 @@ pub trait AsPinsMut: Sized {
     where
         Self: 'a;
 
-    fn as_pins_mut<'a>(&mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
+    fn as_pins_mut<'a, 'b: 'a>(&'b mut self) -> Pins<Self::RX<'a>, Self::TX<'a>>
     where
         Self: 'a;
 }
