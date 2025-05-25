@@ -23,6 +23,7 @@ pub trait AsUartMut {
     fn as_uart(self) -> Self::Target;
 }
 
+/// BSP crates should implement this trait if they want to use this library.
 pub trait Dependency {
     type Target<'a>: AsPinsMut + AsUartMut
     where
@@ -32,13 +33,6 @@ pub trait Dependency {
     where
         Self: 'b;
 }
-
-// /// BSP crates should implement this trait if they want to use this library.
-// pub trait Dependency: Reborrowable
-// where
-//     for<'a> <Self as Reborrowable>::Target<'a>: AsPinsMut + AsUartMut + 'a,
-// {
-// }
 
 enum FeatureState {
     PowerOn,

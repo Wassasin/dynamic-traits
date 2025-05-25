@@ -292,7 +292,21 @@ impl<'a> AsIoReadWriteDevice for UartPrecursor<'a> {
     }
 }
 
-// impl Dependency for DynBoard<'_> {}
+impl Dependency for DynBoard<'_> {
+    type Target<'a>
+        = DynBoard<'a>
+    where
+        Self: 'a;
+
+    fn reborrow<'a, 'b: 'a>(&'b mut self) -> Self::Target<'a>
+    where
+        Self: 'b,
+    {
+        DynBoard {
+            inner: self.inner.reborrow(),
+        }
+    }
+}
 
 #[embassy_executor::task]
 async fn run() {
@@ -305,22 +319,22 @@ async fn run() {
     }
 
     loop {
-        // for board in [Boards::A, Boards::B, Boards::C] {
-        //     log::info!("Board {:?}", board);
+        for board in [Boards::A, Boards::B, Boards::C] {
+            log::info!("Board {:?}", board);
 
-        //     let board = DynBoard::select(&mut p, board);
-        //     embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
-        // }
+            let board = DynBoard::select(&mut p, board);
+            embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
+        }
 
-        let board = BoardA {
-            pins: Pins {
-                rx: p.PIN_A.reborrow(),
-                tx: p.PIN_B.reborrow(),
-            },
-            uart: p.UART0.reborrow(),
-        };
+        // let board = BoardA {
+        //     pins: Pins {
+        //         rx: p.PIN_A.reborrow(),
+        //         tx: p.PIN_B.reborrow(),
+        //     },
+        //     uart: p.UART0.reborrow(),
+        // };
 
-        embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
+        // embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
 
         Timer::after_secs(1).await;
     }
