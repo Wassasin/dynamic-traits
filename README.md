@@ -6,6 +6,6 @@ This example is split into 4 parts:
 * `bin/main`: an example application that makes use of this all
 
 ## TODO
-- [ ] Can we simplify `traits` away?
-- [ ] `hal/foreign` is an implementation of the `traits` directly on some peripherals.
-- [ ] the original problem statement asks for a abstract/generic way to instantiate the `Platform` struct.
+- [ ] PinWrapper must be owned by the board, but perhaps we can remove it
+- [ ] In main() the match blob needs to be split out
+- [ ] Can we generate the macro in a nice way for each board?
