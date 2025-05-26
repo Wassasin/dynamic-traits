@@ -5,13 +5,9 @@ use core::{
 
 use embassy_hal_internal::{Peri, PeripheralType};
 
-use crate::{
-    consumer::Pins,
-    hal::{
-        gpio::{Input, Output},
-        steal::Stealable,
-        uart::Uart,
-    },
+use crate::hal::{
+    gpio::{Input, Output},
+    steal::Stealable,
 };
 
 pub struct Owned<'a, T> {
@@ -51,16 +47,6 @@ impl<'a, T: 'a> Owned<'a, T> {
             _lifetime: PhantomData,
         }
     }
-}
-
-pub trait Reborrowable: Sized {
-    type Target<'a>
-    where
-        Self: 'a;
-
-    fn reborrow<'a, 'b: 'a>(value: &'b mut Owned<'_, Self>) -> Owned<'b, Self::Target<'a>>
-    where
-        Self: 'a;
 }
 
 impl<'a, T: PeripheralType> Into<Owned<'a, Peri<'a, T>>> for Peri<'a, T> {
@@ -218,20 +204,5 @@ impl<'a> Into<Input<'a>> for Owned<'a, Input<'a>> {
 impl<'a> Into<Output<'a>> for Owned<'a, Output<'a>> {
     fn into(self) -> Output<'a> {
         self.inner
-    }
-}
-
-impl<'a> Into<Uart<'a>> for Owned<'a, Uart<'a>> {
-    fn into(self) -> Uart<'a> {
-        self.inner
-    }
-}
-
-impl<'a, RX: 'a, TX: 'a> Into<Pins<RX, TX>> for Owned<'a, Pins<RX, TX>> {
-    fn into(self) -> Pins<RX, TX> {
-        Pins {
-            rx: self.inner.rx,
-            tx: self.inner.tx,
-        }
     }
 }

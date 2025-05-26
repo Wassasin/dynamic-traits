@@ -64,7 +64,7 @@ macro_rules! impl_board {
             }
         }
 
-        impl DynCompatDualMode for $board<'_> {
+        impl DynBoard for $board<'_> {
             fn as_pins_compat(&mut self) -> Pins<DynPin<'_>, DynPin<'_>> {
                 AsPinsMut::as_pins(self)
             }
@@ -141,12 +141,12 @@ impl<'a> AsOutput for DynPin<'a> {
     }
 }
 
-trait DynCompatDualMode {
+trait DynBoard {
     fn as_pins_compat(&mut self) -> Pins<DynPin<'_>, DynPin<'_>>;
     fn as_uart_compat(&mut self) -> Uart<'_>;
 }
 
-impl AsPinsMut for &mut dyn DynCompatDualMode {
+impl AsPinsMut for &mut dyn DynBoard {
     type RX<'a>
         = DynPin<'a>
     where
@@ -162,7 +162,7 @@ impl AsPinsMut for &mut dyn DynCompatDualMode {
     }
 }
 
-impl AsUartMut for &mut dyn DynCompatDualMode {
+impl AsUartMut for &mut dyn DynBoard {
     type Target<'a>
         = Uart<'a>
     where
@@ -187,7 +187,7 @@ async fn run() {
         for board in [Boards::A, Boards::B, Boards::C] {
             log::info!("Board {:?}", board);
 
-            let board: &mut dyn DynCompatDualMode = match board {
+            let board: &mut dyn DynBoard = match board {
                 Boards::A => &mut BoardA {
                     pins: Pins {
                         rx: p.PIN_A.reborrow(),
