@@ -1,4 +1,3 @@
-use crate::hal::steal::Stealable;
 use core::{convert::Infallible, marker::PhantomData};
 use embassy_hal_internal::{Peri, PeripheralType};
 use embedded_hal::digital::{ErrorType, InputPin, OutputPin};
@@ -7,7 +6,7 @@ mod sealed {
     pub trait Instance {}
 }
 
-pub trait Instance: sealed::Instance + PeripheralType + Stealable {}
+pub trait Instance: sealed::Instance + PeripheralType {}
 
 pub struct Flex<'a> {
     _lifetime: PhantomData<&'a ()>,
@@ -92,11 +91,6 @@ macro_rules! impl_pin {
     ($pin_periph:ident) => {
         impl sealed::Instance for crate::hal::peripherals::$pin_periph {}
         impl Instance for crate::hal::peripherals::$pin_periph {}
-        impl Stealable for crate::hal::peripherals::$pin_periph {
-            unsafe fn steal<'a>() -> Peri<'a, Self> {
-                unsafe { crate::hal::peripherals::$pin_periph::steal() }
-            }
-        }
     };
 }
 

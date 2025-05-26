@@ -1,6 +1,5 @@
 use core::{convert::Infallible, marker::PhantomData};
 
-use crate::hal::steal::Stealable;
 use embassy_hal_internal::{Peri, PeripheralType};
 use embedded_io_async::ErrorType;
 
@@ -49,11 +48,6 @@ macro_rules! impl_instance {
     ($periph:ident) => {
         impl sealed::Instance for crate::hal::peripherals::$periph {}
         impl Instance for crate::hal::peripherals::$periph {}
-        impl Stealable for crate::hal::peripherals::$periph {
-            unsafe fn steal<'a>() -> Peri<'a, Self> {
-                unsafe { crate::hal::peripherals::$periph::steal() }
-            }
-        }
     };
 }
 
