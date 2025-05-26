@@ -13,25 +13,20 @@ pub struct Pins<RX, TX> {
 }
 
 pub trait AsPinsMut {
-    type RX: AsOutput + AsInput;
-    type TX: AsOutput + AsInput;
-    fn as_pins(self) -> Pins<Self::RX, Self::TX>;
+    type RX<'a>: AsOutput + AsInput
+    where
+        Self: 'a;
+    type TX<'a>: AsOutput + AsInput
+    where
+        Self: 'a;
+    fn as_pins(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>>;
 }
 
 pub trait AsUartMut {
-    type Target: AsIoReadWriteDevice;
-    fn as_uart(self) -> Self::Target;
-}
-
-/// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency {
-    type Target<'a>: AsPinsMut + AsUartMut
+    type Target<'a>: AsIoReadWriteDevice
     where
         Self: 'a;
-
-    fn reborrow<'a, 'b: 'a>(&'b mut self) -> Self::Target<'a>
-    where
-        Self: 'b;
+    fn as_uart(&mut self) -> Self::Target<'_>;
 }
 
 enum FeatureState {
@@ -54,14 +49,15 @@ async fn wait_for_something() {
 }
 
 /// Core logic implemented by this crate.
-pub async fn run(mut dependency: impl Dependency) -> ! {
+pub async fn run<T>(mut dependency: T) -> !
+where
+    T: AsPinsMut + AsUartMut,
+{
     const MAGIC_SEQUENCE_TO_STARTUP: [u8; 4] = [0x01, 0x02, 0x03, 0xff];
 
     let mut state = FeatureState::PowerOn;
 
     loop {
-        let dependency = dependency.reborrow();
-
         match state {
             FeatureState::PowerOn => {
                 let pins = dependency.as_pins();
@@ -94,7 +90,7 @@ pub async fn run(mut dependency: impl Dependency) -> ! {
                 }
             }
             FeatureState::BitBanging => {
-                let pins = AsPinsMut::as_pins(dependency);
+                let pins = dependency.as_pins();
 
                 let mut rx_pin = AsInput::as_input(pins.rx);
                 let mut tx_pin = AsOutput::as_output(pins.tx);
