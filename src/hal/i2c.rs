@@ -1,20 +1,20 @@
 use core::{convert::Infallible, marker::PhantomData};
 
-use embassy_hal_internal::Peripheral;
+use embassy_hal_internal::{Peri, PeripheralType};
 use embedded_hal::i2c::ErrorType;
 
 mod sealed {
     pub trait Instance {}
 }
 
-pub trait Instance: sealed::Instance {}
+pub trait Instance: sealed::Instance + PeripheralType {}
 
 pub struct I2c<'a> {
     _lifetime: PhantomData<&'a ()>,
 }
 
 impl<'a> I2c<'a> {
-    pub fn new<T: Instance>(_peri: impl Peripheral<P = T> + 'a) -> Self {
+    pub fn new<T: Instance>(_peri: Peri<'a, T>) -> Self {
         Self {
             _lifetime: PhantomData,
         }

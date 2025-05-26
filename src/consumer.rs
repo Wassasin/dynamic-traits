@@ -1,4 +1,5 @@
 //! A driver library that does not know what hardware it is running on.
+
 use embassy_time::Timer;
 use embedded_hal::digital::{InputPin, OutputPin};
 use embedded_io_async::{Read, Write};
@@ -11,15 +12,22 @@ pub struct Pins<RX, TX> {
     pub tx: TX,
 }
 
-pub trait AsPins {
-    type RX: AsOutput + AsInput;
-    type TX: AsOutput + AsInput;
-
-    fn as_pins(&mut self) -> &mut Pins<Self::RX, Self::TX>;
+pub trait AsPinsMut {
+    type RX<'a>: AsOutput + AsInput
+    where
+        Self: 'a;
+    type TX<'a>: AsOutput + AsInput
+    where
+        Self: 'a;
+    fn as_pins(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>>;
 }
 
-/// BSP crates should implement this trait if they want to use this library.
-pub trait Dependency: AsIoReadWriteDevice + AsPins {}
+pub trait AsUartMut {
+    type Target<'a>: AsIoReadWriteDevice
+    where
+        Self: 'a;
+    fn as_uart(&mut self) -> Self::Target<'_>;
+}
 
 enum FeatureState {
     PowerOn,
@@ -41,7 +49,10 @@ async fn wait_for_something() {
 }
 
 /// Core logic implemented by this crate.
-pub async fn run(mut dependencies: impl Dependency) -> ! {
+pub async fn run<T>(mut dependency: T) -> !
+where
+    T: AsPinsMut + AsUartMut,
+{
     const MAGIC_SEQUENCE_TO_STARTUP: [u8; 4] = [0x01, 0x02, 0x03, 0xff];
 
     let mut state = FeatureState::PowerOn;
@@ -49,11 +60,11 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
     loop {
         match state {
             FeatureState::PowerOn => {
-                let pins = dependencies.as_pins();
+                let pins = dependency.as_pins();
 
                 // Weird chip on the other side needs the bus "de-gaussed"
-                let mut rx_pin = pins.rx.as_output();
-                let mut tx_pin = pins.tx.as_output();
+                let mut rx_pin = AsOutput::as_output(pins.rx);
+                let mut tx_pin = AsOutput::as_output(pins.tx);
 
                 rx_pin.set_high().unwrap();
                 tx_pin.set_high().unwrap();
@@ -61,7 +72,8 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
                 state = FeatureState::FullBus;
             }
             FeatureState::FullBus => {
-                let mut uart_bus = dependencies.as_io_read_write();
+                let uart_bus = dependency.as_uart();
+                let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(uart_bus);
 
                 uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
 
@@ -78,10 +90,10 @@ pub async fn run(mut dependencies: impl Dependency) -> ! {
                 }
             }
             FeatureState::BitBanging => {
-                let pins = dependencies.as_pins();
+                let pins = dependency.as_pins();
 
-                let mut rx_pin = pins.rx.as_input();
-                let mut tx_pin = pins.tx.as_output();
+                let mut rx_pin = AsInput::as_input(pins.rx);
+                let mut tx_pin = AsOutput::as_output(pins.tx);
 
                 // probably would have some termination condition
                 while rx_pin.is_low().unwrap() {

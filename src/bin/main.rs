@@ -1,11 +1,11 @@
 use dynamic_traits::{
-    consumer::{self, AsPins, Dependency, Pins},
+    consumer::{self, AsPinsMut, AsUartMut, Pins},
     hal::{
-        Peripherals,
-        gpio::{Input, Output},
+        Peri, Peripherals,
+        gpio::{Input, Instance, Output},
         uart::Uart,
     },
-    traits::AsIoReadWriteDevice,
+    traits::{AsInput, AsOutput},
 };
 use embassy_executor::Executor;
 use embassy_time::Timer;
@@ -16,33 +16,54 @@ macro_rules! impl_board {
     ($board:ident, $pin_rx:ident, $pin_tx:ident, $uart:ident) => {
         struct $board<'a> {
             pins: consumer::Pins<
-                &'a mut dynamic_traits::hal::peripherals::$pin_rx,
-                &'a mut dynamic_traits::hal::peripherals::$pin_tx,
+                PinWrapper<'a, dynamic_traits::hal::peripherals::$pin_rx>,
+                PinWrapper<'a, dynamic_traits::hal::peripherals::$pin_tx>,
             >,
-            uart: &'a mut dynamic_traits::hal::peripherals::$uart,
+            uart: Peri<'a, dynamic_traits::hal::peripherals::$uart>,
         }
 
-        impl<'a> AsPins for $board<'a> {
-            type RX = &'a mut dynamic_traits::hal::peripherals::$pin_rx;
-            type TX = &'a mut dynamic_traits::hal::peripherals::$pin_tx;
-
-            fn as_pins<'b>(&'b mut self) -> &'b mut consumer::Pins<Self::RX, Self::TX> {
-                &mut self.pins
-            }
-        }
-
-        impl AsIoReadWriteDevice for $board<'_> {
+        impl AsUartMut for $board<'_> {
             type Target<'a>
                 = Uart<'a>
             where
                 Self: 'a;
 
-            fn as_io_read_write(&mut self) -> Self::Target<'_> {
-                Uart::new(&mut self.uart, &mut self.pins.rx, &mut self.pins.tx)
+            fn as_uart(&mut self) -> Self::Target<'_> {
+                Uart::new(
+                    self.uart.reborrow(),
+                    self.pins.rx.0.reborrow(),
+                    self.pins.tx.0.reborrow(),
+                )
             }
         }
 
-        impl Dependency for $board<'_> {}
+        impl AsPinsMut for $board<'_> {
+            type RX<'a>
+                = &'a mut dyn DynPin
+            where
+                Self: 'a;
+            type TX<'a>
+                = &'a mut dyn DynPin
+            where
+                Self: 'a;
+
+            fn as_pins(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>> {
+                Pins {
+                    rx: &mut self.pins.rx,
+                    tx: &mut self.pins.tx,
+                }
+            }
+        }
+
+        impl DynBoard for $board<'_> {
+            fn as_pins_compat(&mut self) -> Pins<&'_ mut dyn DynPin, &'_ mut dyn DynPin> {
+                AsPinsMut::as_pins(self)
+            }
+
+            fn as_uart_compat(&mut self) -> Uart<'_> {
+                AsUartMut::as_uart(self)
+            }
+        }
     };
 }
 
@@ -57,37 +78,68 @@ enum Boards {
     C,
 }
 
-enum AnyBoard<'a> {
-    A(BoardA<'a>),
-    B(BoardB<'a>),
-    C(BoardC<'a>),
+pub struct PinWrapper<'a, T: Instance>(Peri<'a, T>);
+
+impl<'a, T: Instance> DynPin for PinWrapper<'a, T> {
+    fn as_input_compat(&mut self) -> Input<'_> {
+        Input::new(self.0.reborrow())
+    }
+
+    fn as_output_compat(&mut self) -> Output<'_> {
+        Output::new(self.0.reborrow())
+    }
 }
 
-impl<'a> AnyBoard<'a> {
-    pub fn select(p: &'a mut Peripherals, board: Boards) -> Self {
-        match board {
-            Boards::A => AnyBoard::A(BoardA {
-                pins: Pins {
-                    rx: &mut p.PIN_A,
-                    tx: &mut p.PIN_B,
-                },
-                uart: &mut p.UART0,
-            }),
-            Boards::B => AnyBoard::B(BoardB {
-                pins: Pins {
-                    rx: &mut p.PIN_B,
-                    tx: &mut p.PIN_C,
-                },
-                uart: &mut p.UART1,
-            }),
-            Boards::C => AnyBoard::C(BoardC {
-                pins: Pins {
-                    rx: &mut p.PIN_C,
-                    tx: &mut p.PIN_D,
-                },
-                uart: &mut p.UART2,
-            }),
-        }
+trait DynPin {
+    fn as_input_compat(&mut self) -> Input<'_>;
+    fn as_output_compat(&mut self) -> Output<'_>;
+}
+
+impl<'a> AsInput for &'a mut dyn DynPin {
+    type Target = Input<'a>;
+
+    fn as_input(self) -> Self::Target {
+        self.as_input_compat()
+    }
+}
+
+impl<'a> AsOutput for &'a mut dyn DynPin {
+    type Target = Output<'a>;
+
+    fn as_output(self) -> Self::Target {
+        self.as_output_compat()
+    }
+}
+
+trait DynBoard {
+    fn as_pins_compat(&mut self) -> Pins<&mut dyn DynPin, &mut dyn DynPin>;
+    fn as_uart_compat(&mut self) -> Uart<'_>;
+}
+
+impl AsPinsMut for &mut dyn DynBoard {
+    type RX<'a>
+        = &'a mut dyn DynPin
+    where
+        Self: 'a;
+
+    type TX<'a>
+        = &'a mut dyn DynPin
+    where
+        Self: 'a;
+
+    fn as_pins(&mut self) -> Pins<Self::RX<'_>, Self::TX<'_>> {
+        self.as_pins_compat()
+    }
+}
+
+impl AsUartMut for &mut dyn DynBoard {
+    type Target<'a>
+        = Uart<'a>
+    where
+        Self: 'a;
+
+    fn as_uart(&mut self) -> Self::Target<'_> {
+        self.as_uart_compat()
     }
 }
 
@@ -95,28 +147,41 @@ impl<'a> AnyBoard<'a> {
 async fn run() {
     let mut p = unsafe { Peripherals::steal() };
     {
-        let mut output = Output::new(&mut p.PIN_A);
+        let mut output = Output::new(p.PIN_A.reborrow());
         output.set_high().unwrap();
 
-        let _input = Input::new(&mut p.PIN_A);
+        let _input = Input::new(p.PIN_A.reborrow());
     }
 
     loop {
         for board in [Boards::A, Boards::B, Boards::C] {
-            log::info!("{:?}", board);
+            log::info!("Board {:?}", board);
 
-            let board = AnyBoard::select(&mut p, board);
+            let board: &mut dyn DynBoard = match board {
+                Boards::A => &mut BoardA {
+                    pins: Pins {
+                        rx: PinWrapper(p.PIN_A.reborrow()),
+                        tx: PinWrapper(p.PIN_B.reborrow()),
+                    },
+                    uart: p.UART0.reborrow(),
+                },
+                Boards::B => &mut BoardB {
+                    pins: Pins {
+                        rx: PinWrapper(p.PIN_B.reborrow()),
+                        tx: PinWrapper(p.PIN_C.reborrow()),
+                    },
+                    uart: p.UART1.reborrow(),
+                },
+                Boards::C => &mut BoardC {
+                    pins: Pins {
+                        rx: PinWrapper(p.PIN_C.reborrow()),
+                        tx: PinWrapper(p.PIN_D.reborrow()),
+                    },
+                    uart: p.UART2.reborrow(),
+                },
+            };
 
-            async fn run(board: impl Dependency) {
-                embassy_futures::select::select(consumer::run(board), Timer::after_millis(100))
-                    .await;
-            }
-
-            match board {
-                AnyBoard::A(board) => run(board).await,
-                AnyBoard::B(board) => run(board).await,
-                AnyBoard::C(board) => run(board).await,
-            }
+            embassy_futures::select::select(consumer::run(board), Timer::after_millis(100)).await;
         }
 
         Timer::after_secs(1).await;
