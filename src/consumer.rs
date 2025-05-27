@@ -49,7 +49,7 @@ async fn wait_for_something() {
 }
 
 /// Core logic implemented by this crate.
-pub async fn run<T>(mut dependency: T) -> !
+pub async fn run<T>(mut board: T) -> !
 where
     T: AsPinsMut + AsUartMut,
 {
@@ -60,7 +60,7 @@ where
     loop {
         match state {
             FeatureState::PowerOn => {
-                let pins = dependency.as_pins();
+                let pins = board.as_pins();
 
                 // Weird chip on the other side needs the bus "de-gaussed"
                 let mut rx_pin = AsOutput::as_output(pins.rx);
@@ -72,7 +72,7 @@ where
                 state = FeatureState::FullBus;
             }
             FeatureState::FullBus => {
-                let uart_bus = dependency.as_uart();
+                let uart_bus = board.as_uart();
                 let mut uart_bus = AsIoReadWriteDevice::as_io_read_write(uart_bus);
 
                 uart_bus.write(&MAGIC_SEQUENCE_TO_STARTUP).await.unwrap();
@@ -90,7 +90,7 @@ where
                 }
             }
             FeatureState::BitBanging => {
-                let pins = dependency.as_pins();
+                let pins = board.as_pins();
 
                 let mut rx_pin = AsInput::as_input(pins.rx);
                 let mut tx_pin = AsOutput::as_output(pins.tx);
